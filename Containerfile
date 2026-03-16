@@ -5,7 +5,7 @@ ENV GOPROXY=direct
 ENV GONOSUMDB=github.com/robert7528/hycore
 ENV GONOSUMCHECK=github.com/robert7528/hycore
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY go.mod go.su[m] ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -o hycert-api ./cmd/server
