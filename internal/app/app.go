@@ -40,6 +40,8 @@ func Run() error {
 			// Health
 			health.NewHandler,
 		),
+		fx.Invoke(server.RegisterRoutes),
+		fx.Invoke(server.Start),
 	)
 	app.Run()
 	return nil
