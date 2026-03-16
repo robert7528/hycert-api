@@ -1,0 +1,20 @@
+# Binaries
+hycert-api
+hycert-api.exe
+
+# Logs
+logs/
+
+# Config overrides
+configs/config.local.yaml
+
+# Build output
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

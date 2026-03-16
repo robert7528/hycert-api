@@ -1,0 +1,11 @@
+server:
+  port: "8082"
+  mode: "debug"
+
+log:
+  level: "debug"
+  filename: "logs/hycert-api.log"
+
+jwt:
+  expiry_hours: 24
+  # secret: override via JWT_SECRET env (must match hyadmin-api)

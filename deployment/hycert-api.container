@@ -1,0 +1,34 @@
+# Podman Quadlet - HySP Certificate API
+#
+# 安裝方式：
+#   sudo cp hycert-api.container /etc/containers/systemd/hycert-api.container
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now hycert-api
+#
+# 之後操作：
+#   sudo systemctl restart hycert-api
+#   sudo systemctl status hycert-api
+#   sudo journalctl -u hycert-api -f
+
+[Unit]
+Description=HySP Certificate API (Go + Gin)
+After=network.target
+
+[Container]
+Image=ghcr.io/robert7528/hycert-api:latest
+PublishPort=127.0.0.1:8082:8082
+
+# Secrets
+EnvironmentFile=/etc/hycert/api.env
+
+# Log
+LogDriver=journald
+
+[Service]
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target
