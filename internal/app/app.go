@@ -40,8 +40,6 @@ func Run() error {
 			// Health
 			health.NewHandler,
 		),
-		// Suppress fx startup/shutdown logs
-		fx.NopLogger,
 	)
 	app.Run()
 	return nil
