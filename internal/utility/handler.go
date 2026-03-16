@@ -51,8 +51,12 @@ func (h *Handler) Convert(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
 		return
 	}
-	// TODO: implement convert via converter service
-	c.JSON(http.StatusNotImplemented, gin.H{"success": false, "error": gin.H{"code": "NOT_IMPLEMENTED", "message": "convert endpoint not yet implemented"}})
+	resp, err := h.svc.Convert(&req)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"success": false, "error": gin.H{"code": "CONVERT_FAILED", "message": err.Error()}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": resp})
 }
 
 // GenerateCSR handles POST /utility/generate-csr

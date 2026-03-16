@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/hysp/hycert-api/internal/chain"
+	"github.com/hysp/hycert-api/internal/converter"
 	"github.com/hysp/hycert-api/internal/health"
 	"github.com/hysp/hycert-api/internal/parser"
 	"github.com/hysp/hycert-api/internal/server"
@@ -32,6 +33,9 @@ func Run() error {
 			chain.NewRootStore,
 			chain.NewFetcher,
 			chain.NewBuilder,
+
+			// Converter
+			converter.New,
 
 			// Utility (orchestration)
 			utility.NewService,

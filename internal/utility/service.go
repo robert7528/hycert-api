@@ -17,18 +17,20 @@ import (
 	"time"
 
 	"github.com/hysp/hycert-api/internal/chain"
+	"github.com/hysp/hycert-api/internal/converter"
 	"github.com/hysp/hycert-api/internal/parser"
 	"go.uber.org/zap"
 )
 
 type Service struct {
-	parser  *parser.Parser
-	builder *chain.Builder
-	log     *zap.Logger
+	parser    *parser.Parser
+	builder   *chain.Builder
+	converter *converter.Converter
+	log       *zap.Logger
 }
 
-func NewService(p *parser.Parser, b *chain.Builder, log *zap.Logger) *Service {
-	return &Service{parser: p, builder: b, log: log}
+func NewService(p *parser.Parser, b *chain.Builder, conv *converter.Converter, log *zap.Logger) *Service {
+	return &Service{parser: p, builder: b, converter: conv, log: log}
 }
 
 // Verify parses a certificate and validates its chain.
@@ -161,6 +163,60 @@ func (s *Service) Parse(req *ParseRequest) (*ParseResponse, error) {
 	}
 
 	return resp, nil
+}
+
+// Convert converts a certificate to the target format.
+func (s *Service) Convert(req *ConvertRequest) (*ConvertResponse, error) {
+	includeChain := true
+	if req.Options.IncludeChain != nil {
+		includeChain = *req.Options.IncludeChain
+	}
+
+	// Parse intermediates if provided
+	var intermediates []*x509.Certificate
+	for _, ci := range req.ChainInput.Intermediates {
+		parsed, err := s.parser.Parse([]byte(ci), "")
+		if err != nil {
+			continue
+		}
+		intermediates = append(intermediates, parsed.Certificates...)
+	}
+	if req.ChainInput.Bundle != "" {
+		parsed, err := s.parser.Parse([]byte(req.ChainInput.Bundle), "")
+		if err == nil {
+			intermediates = append(intermediates, parsed.Certificates...)
+		}
+	}
+
+	convReq := &converter.ConvertRequest{
+		Certificate:   req.Certificate,
+		PrivateKey:    req.PrivateKey,
+		Password:      req.Options.Password,
+		Intermediates: intermediates,
+		TargetFormat:  req.TargetFormat,
+		FriendlyName:  req.Options.FriendlyName,
+		IncludeChain:  includeChain,
+	}
+
+	result, err := s.converter.Convert(convReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// For binary formats, encode as base64
+	contentBase64 := converter.EncodeBase64(result.Data)
+	if result.Format == "pem" {
+		// PEM is already text, but still base64 for consistency
+		contentBase64 = converter.EncodeBase64(result.Data)
+	}
+
+	return &ConvertResponse{
+		Format:        result.Format,
+		ContentBase64: contentBase64,
+		FilenameSugg:  result.FilenameSugg,
+		ChainIncluded: result.ChainIncluded,
+		ChainNodes:    result.ChainNodes,
+	}, nil
 }
 
 // GenerateCSR generates a new private key and CSR.
