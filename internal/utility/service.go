@@ -131,7 +131,7 @@ func (s *Service) Verify(req *VerifyRequest) (*VerifyResponse, error) {
 
 // Parse detects format and extracts certificate details.
 func (s *Service) Parse(req *ParseRequest) (*ParseResponse, error) {
-	result, err := s.parser.Parse([]byte(req.Input), req.Password)
+	result, err := s.parser.ParseWithType([]byte(req.Input), req.InputType, req.Password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse input: %w", err)
 	}

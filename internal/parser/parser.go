@@ -3,8 +3,11 @@ package parser
 import (
 	"crypto"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+
+	"software.sslmate.com/src/go-pkcs12"
 )
 
 // Format represents the detected certificate format.
@@ -13,6 +16,7 @@ type Format string
 const (
 	FormatPEM     Format = "pem"
 	FormatDER     Format = "der"
+	FormatPFX     Format = "pfx"
 	FormatUnknown Format = "unknown"
 )
 
@@ -32,7 +36,31 @@ func New() *Parser {
 }
 
 // Parse detects the format and extracts certificates (and optionally a private key).
+// inputType can be: "" or "auto" (auto-detect), "pem", "der_base64", "pfx_base64".
+// For base64 types, data is expected to be base64-encoded text.
 func (p *Parser) Parse(data []byte, password string) (*ParseResult, error) {
+	return p.ParseWithType(data, "", password)
+}
+
+// ParseWithType parses with an explicit format hint.
+func (p *Parser) ParseWithType(data []byte, inputType string, password string) (*ParseResult, error) {
+	// Handle base64-encoded binary formats
+	switch inputType {
+	case "pfx_base64":
+		raw, err := base64.StdEncoding.DecodeString(string(data))
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 PFX data: %w", err)
+		}
+		return parsePFX(raw, password)
+	case "der_base64":
+		raw, err := base64.StdEncoding.DecodeString(string(data))
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 DER data: %w", err)
+		}
+		return parseDER(raw)
+	}
+
+	// Auto-detect format
 	format := detect(data)
 
 	switch format {
@@ -40,6 +68,8 @@ func (p *Parser) Parse(data []byte, password string) (*ParseResult, error) {
 		return parsePEM(data)
 	case FormatDER:
 		return parseDER(data)
+	case FormatPFX:
+		return parsePFX(data, password)
 	default:
 		// Try PEM first, then DER
 		result, err := parsePEM(data)
@@ -60,11 +90,39 @@ func detect(data []byte) Format {
 	if block, _ := pem.Decode(data); block != nil {
 		return FormatPEM
 	}
+	// Check for PFX/PKCS#12 (ASN.1 SEQUENCE containing OID 1.2.840.113549.1.7.1)
+	// PFX files start with 0x30 0x82 and contain the PKCS#7 OID
+	if isPFX(data) {
+		return FormatPFX
+	}
 	// Check for DER (ASN.1 SEQUENCE tag)
 	if len(data) > 2 && data[0] == 0x30 {
 		return FormatDER
 	}
 	return FormatUnknown
+}
+
+// isPFX checks if data looks like a PKCS#12/PFX file.
+// PFX files are ASN.1 SEQUENCE that contain the PKCS#7 data OID (1.2.840.113549.1.7.1).
+func isPFX(data []byte) bool {
+	if len(data) < 4 || data[0] != 0x30 {
+		return false
+	}
+	// Try to verify by looking for the PKCS#7 OID bytes: 06 09 2A 86 48 86 F7 0D 01 07 01
+	pfxOID := []byte{0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x07, 0x01}
+	for i := 0; i+len(pfxOID) <= len(data) && i < 30; i++ {
+		match := true
+		for j := range pfxOID {
+			if data[i+j] != pfxOID[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 func parsePEM(data []byte) (*ParseResult, error) {
@@ -122,4 +180,28 @@ func parseDER(data []byte) (*ParseResult, error) {
 		Format:       FormatDER,
 		Certificates: []*x509.Certificate{cert},
 	}, nil
+}
+
+func parsePFX(data []byte, password string) (*ParseResult, error) {
+	privKey, cert, caCerts, err := pkcs12.DecodeChain(data, password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode PFX/PKCS#12: %w", err)
+	}
+
+	result := &ParseResult{
+		Format: FormatPFX,
+	}
+
+	if cert != nil {
+		result.Certificates = append(result.Certificates, cert)
+	}
+	result.Certificates = append(result.Certificates, caCerts...)
+
+	if privKey != nil {
+		if k, ok := privKey.(crypto.PrivateKey); ok {
+			result.PrivateKey = k
+		}
+	}
+
+	return result, nil
 }
