@@ -11,6 +11,8 @@ import (
 type VerifyRequest struct {
 	Certificate string     `json:"certificate" binding:"required"`
 	PrivateKey  string     `json:"private_key,omitempty"`
+	InputType   string     `json:"input_type,omitempty"`   // auto | pem | der_base64 | pfx_base64
+	Password    string     `json:"password,omitempty"`
 	ChainInput  ChainInput `json:"chain_input,omitempty"`
 	Options     struct {
 		CheckOCSP bool `json:"check_ocsp"`
@@ -121,11 +123,13 @@ type CertDetail struct {
 // ── Convert ─────────────────────────────────────────────────────────────────
 
 type ConvertRequest struct {
-	Certificate  string     `json:"certificate" binding:"required"`
-	PrivateKey   string     `json:"private_key,omitempty"`
-	ChainInput   ChainInput `json:"chain_input,omitempty"`
-	TargetFormat string     `json:"target_format" binding:"required"` // pem | der | pfx | jks | p7b
-	Options      struct {
+	Certificate   string     `json:"certificate" binding:"required"`
+	PrivateKey    string     `json:"private_key,omitempty"`
+	InputType     string     `json:"input_type,omitempty"`     // auto | pem | der_base64 | pfx_base64
+	InputPassword string     `json:"input_password,omitempty"` // password for input PFX (separate from output password)
+	ChainInput    ChainInput `json:"chain_input,omitempty"`
+	TargetFormat  string     `json:"target_format" binding:"required"` // pem | der | pfx | jks | p7b
+	Options       struct {
 		Password     string `json:"password,omitempty"`
 		IncludeChain *bool  `json:"include_chain,omitempty"`
 		FriendlyName string `json:"friendly_name,omitempty"`

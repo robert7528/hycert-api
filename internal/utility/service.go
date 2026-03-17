@@ -36,7 +36,7 @@ func NewService(p *parser.Parser, b *chain.Builder, conv *converter.Converter, l
 // Verify parses a certificate and validates its chain.
 func (s *Service) Verify(req *VerifyRequest) (*VerifyResponse, error) {
 	// Parse leaf certificate
-	result, err := s.parser.Parse([]byte(req.Certificate), "")
+	result, err := s.parser.ParseWithType([]byte(req.Certificate), req.InputType, req.Password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse certificate: %w", err)
 	}
@@ -191,6 +191,8 @@ func (s *Service) Convert(req *ConvertRequest) (*ConvertResponse, error) {
 	convReq := &converter.ConvertRequest{
 		Certificate:   req.Certificate,
 		PrivateKey:    req.PrivateKey,
+		InputType:     req.InputType,
+		InputPassword: req.InputPassword,
 		Password:      req.Options.Password,
 		Intermediates: intermediates,
 		TargetFormat:  req.TargetFormat,

@@ -1,14 +1,18 @@
 package converter
 
 import (
+	"bytes"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"time"
 
 	"github.com/hysp/hycert-api/internal/parser"
+	keystore "github.com/pavlo-v-chernykh/keystore-go/v4"
+	"github.com/smallstep/pkcs7"
 	"go.uber.org/zap"
-	"software.sslmate.com/src/go-pkcs12"
+	pkcs12 "software.sslmate.com/src/go-pkcs12"
 )
 
 // Supported target formats.
@@ -16,14 +20,18 @@ const (
 	FormatPEM = "pem"
 	FormatDER = "der"
 	FormatPFX = "pfx"
+	FormatJKS = "jks"
+	FormatP7B = "p7b"
 )
 
 // ConvertRequest describes what to convert.
 type ConvertRequest struct {
 	// Raw input data (PEM string or base64-encoded binary)
-	Certificate string
-	PrivateKey  string
-	Password    string // for PFX/JKS output or input
+	Certificate   string
+	PrivateKey    string
+	InputType     string // auto | pem | der_base64 | pfx_base64
+	InputPassword string // password for input PFX (separate from output password)
+	Password      string // for PFX/JKS output
 	// Parsed intermediates to include
 	Intermediates []*x509.Certificate
 	TargetFormat  string
@@ -33,11 +41,11 @@ type ConvertRequest struct {
 
 // ConvertResult is the conversion output.
 type ConvertResult struct {
-	Data             []byte
-	Format           string
-	FilenameSugg     string
-	ChainIncluded    bool
-	ChainNodes       int
+	Data         []byte
+	Format       string
+	FilenameSugg string
+	ChainIncluded bool
+	ChainNodes    int
 }
 
 // Converter handles certificate format conversions.
@@ -53,8 +61,8 @@ func New(p *parser.Parser, log *zap.Logger) *Converter {
 
 // Convert performs the format conversion.
 func (c *Converter) Convert(req *ConvertRequest) (*ConvertResult, error) {
-	// Parse the input certificate
-	certResult, err := c.parser.Parse([]byte(req.Certificate), req.Password)
+	// Parse the input certificate using InputType and InputPassword
+	certResult, err := c.parser.ParseWithType([]byte(req.Certificate), req.InputType, req.InputPassword)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse certificate: %w", err)
 	}
@@ -92,6 +100,10 @@ func (c *Converter) Convert(req *ConvertRequest) (*ConvertResult, error) {
 		return c.toDER(leaf)
 	case FormatPFX:
 		return c.toPFX(leaf, chainCerts, privKey, req.Password, req.FriendlyName)
+	case FormatJKS:
+		return c.toJKS(leaf, chainCerts, privKey, req.Password)
+	case FormatP7B:
+		return c.toP7B(leaf, chainCerts)
 	default:
 		return nil, fmt.Errorf("unsupported target format: %s", req.TargetFormat)
 	}
@@ -156,6 +168,89 @@ func (c *Converter) toPFX(leaf *x509.Certificate, chain []*x509.Certificate, pri
 		ChainIncluded: len(chain) > 0,
 		ChainNodes:    1 + len(chain),
 	}, nil
+}
+
+func (c *Converter) toJKS(leaf *x509.Certificate, chain []*x509.Certificate, privKey interface{}, password string) (*ConvertResult, error) {
+	if privKey == nil {
+		return nil, fmt.Errorf("private key is required for JKS conversion")
+	}
+	if password == "" {
+		return nil, fmt.Errorf("password is required for JKS conversion")
+	}
+
+	// Marshal private key to PKCS8 DER
+	keyDER, err := x509.MarshalPKCS8PrivateKey(privKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal private key: %w", err)
+	}
+
+	// Build certificate chain: leaf + intermediates
+	var certChain []keystore.Certificate
+	certChain = append(certChain, keystore.Certificate{
+		Type:    "X509",
+		Content: leaf.Raw,
+	})
+	for _, cert := range chain {
+		certChain = append(certChain, keystore.Certificate{
+			Type:    "X509",
+			Content: cert.Raw,
+		})
+	}
+
+	// Create keystore with PrivateKeyEntry
+	ks := keystore.New()
+	pke := keystore.PrivateKeyEntry{
+		CreationTime:     time.Now(),
+		PrivateKey:       keyDER,
+		CertificateChain: certChain,
+	}
+
+	if err := ks.SetPrivateKeyEntry("1", pke, []byte(password)); err != nil {
+		return nil, fmt.Errorf("failed to set JKS private key entry: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := ks.Store(&buf, []byte(password)); err != nil {
+		return nil, fmt.Errorf("failed to encode JKS keystore: %w", err)
+	}
+
+	return &ConvertResult{
+		Data:          buf.Bytes(),
+		Format:        FormatJKS,
+		FilenameSugg:  "keystore.jks",
+		ChainIncluded: len(chain) > 0,
+		ChainNodes:    1 + len(chain),
+	}, nil
+}
+
+func (c *Converter) toP7B(leaf *x509.Certificate, chain []*x509.Certificate) (*ConvertResult, error) {
+	// Collect all certificates (leaf + chain)
+	var certs []*x509.Certificate
+	certs = append(certs, leaf)
+	certs = append(certs, chain...)
+
+	// Build degenerate PKCS#7 SignedData (certificates only, no signature)
+	p7bData, err := pkcs7.DegenerateCertificate(rawCerts(certs))
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode P7B/PKCS#7: %w", err)
+	}
+
+	return &ConvertResult{
+		Data:          p7bData,
+		Format:        FormatP7B,
+		FilenameSugg:  "certificate.p7b",
+		ChainIncluded: len(chain) > 0,
+		ChainNodes:    1 + len(chain),
+	}, nil
+}
+
+// rawCerts extracts raw DER bytes from x509.Certificate slice.
+func rawCerts(certs []*x509.Certificate) []byte {
+	var raw []byte
+	for _, c := range certs {
+		raw = append(raw, c.Raw...)
+	}
+	return raw
 }
 
 // EncodeBase64 encodes binary data as base64 string.
