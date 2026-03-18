@@ -308,13 +308,27 @@ func (s *Service) GenerateCSR(req *GenerateCSRRequest) (*GenerateCSRResponse, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal private key: %w", err)
 	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	var keyPEM []byte
+	keyEncrypted := false
+
+	if req.Passphrase != "" {
+		// Encrypt with AES-256-CBC (legacy OpenSSL format, widely compatible)
+		encBlock, err := x509.EncryptPEMBlock(rand.Reader, "PRIVATE KEY", keyDER, []byte(req.Passphrase), x509.PEMCipherAES256) //nolint:staticcheck
+		if err != nil {
+			return nil, fmt.Errorf("failed to encrypt private key: %w", err)
+		}
+		keyPEM = pem.EncodeToMemory(encBlock)
+		keyEncrypted = true
+	} else {
+		keyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	}
 
 	return &GenerateCSRResponse{
 		CSRPEM:        string(csrPEM),
 		PrivateKeyPEM: string(keyPEM),
 		KeyType:       keyType,
 		KeyBits:       keyBits,
+		KeyEncrypted:  keyEncrypted,
 		Warning:       "Save the private_key_pem immediately. It will not be stored by the server.",
 	}, nil
 }

@@ -188,8 +188,9 @@ type GenerateCSRRequest struct {
 		ST string `json:"st,omitempty"`
 		L  string `json:"l,omitempty"`
 	} `json:"subject,omitempty"`
-	KeyType string `json:"key_type,omitempty"` // RSA (default) | EC
-	KeyBits int    `json:"key_bits,omitempty"` // RSA: 2048(default)/4096, EC: 256(default)/384
+	KeyType    string `json:"key_type,omitempty"`    // RSA (default) | EC
+	KeyBits    int    `json:"key_bits,omitempty"`    // RSA: 2048(default)/4096, EC: 256(default)/384
+	Passphrase string `json:"passphrase,omitempty"` // If set, encrypt the private key with AES-256-CBC
 }
 
 type GenerateCSRResponse struct {
@@ -197,5 +198,6 @@ type GenerateCSRResponse struct {
 	PrivateKeyPEM string `json:"private_key_pem"`
 	KeyType       string `json:"key_type"`
 	KeyBits       int    `json:"key_bits"`
+	KeyEncrypted  bool   `json:"key_encrypted"`
 	Warning       string `json:"warning"`
 }
