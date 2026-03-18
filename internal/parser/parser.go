@@ -1,12 +1,14 @@
 package parser
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 
+	"github.com/pavlo-v-chernykh/keystore-go/v4"
 	"software.sslmate.com/src/go-pkcs12"
 )
 
@@ -17,6 +19,7 @@ const (
 	FormatPEM     Format = "pem"
 	FormatDER     Format = "der"
 	FormatPFX     Format = "pfx"
+	FormatJKS     Format = "jks"
 	FormatUnknown Format = "unknown"
 )
 
@@ -56,6 +59,18 @@ func (p *Parser) ParseWithType(data []byte, inputType string, password string) (
 		raw, err := base64.StdEncoding.DecodeString(string(data))
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode base64 DER data: %w", err)
+		}
+		return parseDER(raw)
+	case "jks_base64":
+		raw, err := base64.StdEncoding.DecodeString(string(data))
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 JKS data: %w", err)
+		}
+		return parseJKS(raw, password)
+	case "p7b_base64":
+		raw, err := base64.StdEncoding.DecodeString(string(data))
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 P7B data: %w", err)
 		}
 		return parseDER(raw)
 	}
@@ -180,6 +195,54 @@ func parseDER(data []byte) (*ParseResult, error) {
 		Format:       FormatDER,
 		Certificates: []*x509.Certificate{cert},
 	}, nil
+}
+
+func parseJKS(data []byte, password string) (*ParseResult, error) {
+	ks := keystore.New()
+	if err := ks.Load(bytes.NewReader(data), []byte(password)); err != nil {
+		return nil, fmt.Errorf("failed to load JKS keystore: %w", err)
+	}
+
+	result := &ParseResult{Format: FormatJKS}
+
+	for _, alias := range ks.Aliases() {
+		if ks.IsTrustedCertificateEntry(alias) {
+			entry, err := ks.GetTrustedCertificateEntry(alias)
+			if err != nil {
+				continue
+			}
+			cert, err := x509.ParseCertificate(entry.Certificate.Content)
+			if err != nil {
+				continue
+			}
+			result.Certificates = append(result.Certificates, cert)
+		}
+		if ks.IsPrivateKeyEntry(alias) {
+			entry, err := ks.GetPrivateKeyEntry(alias, []byte(password))
+			if err != nil {
+				continue
+			}
+			// Parse certificate chain
+			for _, c := range entry.CertificateChain {
+				cert, err := x509.ParseCertificate(c.Content)
+				if err != nil {
+					continue
+				}
+				result.Certificates = append(result.Certificates, cert)
+			}
+			// Parse private key
+			key, err := x509.ParsePKCS8PrivateKey(entry.PrivateKey)
+			if err == nil {
+				result.PrivateKey = key.(crypto.PrivateKey)
+			}
+		}
+	}
+
+	if len(result.Certificates) == 0 {
+		return nil, fmt.Errorf("no certificates found in JKS keystore")
+	}
+
+	return result, nil
 }
 
 func parsePFX(data []byte, password string) (*ParseResult, error) {
