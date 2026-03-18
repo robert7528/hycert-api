@@ -163,6 +163,19 @@ type MergeChainNode struct {
 	Issuer string `json:"issuer"`
 }
 
+// ── Decrypt Key ────────────────────────────────────────────────────────────
+
+type DecryptKeyRequest struct {
+	EncryptedKey string `json:"encrypted_key" binding:"required"`
+	Password     string `json:"password" binding:"required"`
+}
+
+type DecryptKeyResponse struct {
+	PrivateKeyPEM string `json:"private_key_pem"`
+	KeyType       string `json:"key_type"`
+	Bits          int    `json:"bits"`
+}
+
 // ── Generate CSR ────────────────────────────────────────────────────────────
 
 type GenerateCSRRequest struct {

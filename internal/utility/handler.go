@@ -74,6 +74,21 @@ func (h *Handler) MergeChain(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": resp})
 }
 
+// DecryptKey handles POST /utility/decrypt-key
+func (h *Handler) DecryptKey(c *gin.Context) {
+	var req DecryptKeyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+	resp, err := h.svc.DecryptKey(&req)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"success": false, "error": gin.H{"code": "DECRYPT_FAILED", "message": err.Error()}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": resp})
+}
+
 // GenerateCSR handles POST /utility/generate-csr
 func (h *Handler) GenerateCSR(c *gin.Context) {
 	var req GenerateCSRRequest
