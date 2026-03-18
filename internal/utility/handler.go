@@ -59,6 +59,21 @@ func (h *Handler) Convert(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": resp})
 }
 
+// MergeChain handles POST /utility/merge-chain
+func (h *Handler) MergeChain(c *gin.Context) {
+	var req MergeChainRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+	resp, err := h.svc.MergeChain(&req)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"success": false, "error": gin.H{"code": "MERGE_FAILED", "message": err.Error()}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": resp})
+}
+
 // GenerateCSR handles POST /utility/generate-csr
 func (h *Handler) GenerateCSR(c *gin.Context) {
 	var req GenerateCSRRequest

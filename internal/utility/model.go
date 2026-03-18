@@ -144,6 +144,25 @@ type ConvertResponse struct {
 	ChainNodes       int    `json:"chain_nodes"`
 }
 
+// ── Merge Chain ────────────────────────────────────────────────────────────
+
+type MergeChainRequest struct {
+	Certificates []string `json:"certificates" binding:"required,min=1"`
+}
+
+type MergeChainResponse struct {
+	Chain []MergeChainNode `json:"chain"`
+	PEM   string           `json:"pem"`
+	Count int              `json:"count"`
+}
+
+type MergeChainNode struct {
+	Index  int    `json:"index"`
+	Role   string `json:"role"` // leaf | intermediate | root
+	CN     string `json:"cn"`
+	Issuer string `json:"issuer"`
+}
+
 // ── Generate CSR ────────────────────────────────────────────────────────────
 
 type GenerateCSRRequest struct {

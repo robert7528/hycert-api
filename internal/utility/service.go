@@ -319,6 +319,127 @@ func (s *Service) GenerateCSR(req *GenerateCSRRequest) (*GenerateCSRResponse, er
 	}, nil
 }
 
+// MergeChain accepts multiple PEM certificates and returns them ordered as a chain.
+// Order: leaf → intermediate(s) → root, determined by Issuer/Subject matching.
+func (s *Service) MergeChain(req *MergeChainRequest) (*MergeChainResponse, error) {
+	// Parse all input certificates
+	var allCerts []*x509.Certificate
+	for i, input := range req.Certificates {
+		result, err := s.parser.ParseWithType([]byte(input), "", "")
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse certificate #%d: %w", i+1, err)
+		}
+		allCerts = append(allCerts, result.Certificates...)
+	}
+
+	if len(allCerts) == 0 {
+		return nil, fmt.Errorf("no certificates found in input")
+	}
+
+	// Order the chain: leaf → intermediate(s) → root
+	ordered := orderChain(allCerts)
+
+	// Build PEM output
+	var pemBuilder strings.Builder
+	var nodes []MergeChainNode
+	for i, cert := range ordered {
+		block := &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}
+		pemBuilder.Write(pem.EncodeToMemory(block))
+
+		nodes = append(nodes, MergeChainNode{
+			Index:  i,
+			Role:   classifyRole(cert),
+			CN:     cert.Subject.CommonName,
+			Issuer: cert.Issuer.CommonName,
+		})
+	}
+
+	return &MergeChainResponse{
+		Chain: nodes,
+		PEM:   pemBuilder.String(),
+		Count: len(ordered),
+	}, nil
+}
+
+// orderChain sorts certificates into chain order: leaf → intermediate(s) → root.
+// Uses Subject/Issuer matching to build the chain from leaf upward.
+func orderChain(certs []*x509.Certificate) []*x509.Certificate {
+	if len(certs) <= 1 {
+		return certs
+	}
+
+	// Build a map from Subject CN to certificate for quick lookup
+	bySubject := make(map[string]*x509.Certificate)
+	for _, c := range certs {
+		bySubject[c.Subject.CommonName] = c
+	}
+
+	// Find the leaf: the cert whose Subject CN is NOT any other cert's Issuer CN,
+	// or the cert that is not a CA.
+	isIssuer := make(map[string]bool)
+	for _, c := range certs {
+		isIssuer[c.Issuer.CommonName] = true
+	}
+
+	var leaf *x509.Certificate
+	for _, c := range certs {
+		if !c.IsCA {
+			leaf = c
+			break
+		}
+	}
+	if leaf == nil {
+		// All are CA certs — find the one not issuing any other cert
+		isSubjectOfIssuer := make(map[string]bool)
+		for _, c := range certs {
+			if c.Subject.CommonName != c.Issuer.CommonName {
+				isSubjectOfIssuer[c.Issuer.CommonName] = true
+			}
+		}
+		for _, c := range certs {
+			if !isSubjectOfIssuer[c.Subject.CommonName] && c.Subject.CommonName != c.Issuer.CommonName {
+				leaf = c
+				break
+			}
+		}
+	}
+	if leaf == nil {
+		// Fallback: just return as-is
+		return certs
+	}
+
+	// Walk up the chain from leaf
+	var ordered []*x509.Certificate
+	visited := make(map[string]bool)
+	current := leaf
+
+	for current != nil {
+		ordered = append(ordered, current)
+		visited[current.Subject.CommonName] = true
+
+		// Self-signed root — stop
+		if current.Subject.CommonName == current.Issuer.CommonName {
+			break
+		}
+
+		// Find the issuer
+		issuer, ok := bySubject[current.Issuer.CommonName]
+		if !ok || visited[issuer.Subject.CommonName] {
+			break
+		}
+		current = issuer
+	}
+
+	// Append any remaining certs not in the chain
+	for _, c := range certs {
+		if !visited[c.Subject.CommonName] {
+			ordered = append(ordered, c)
+		}
+	}
+
+	return ordered
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 func extractSubject(cert *x509.Certificate) SubjectInfo {

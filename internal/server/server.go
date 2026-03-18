@@ -55,6 +55,7 @@ func RegisterRoutes(p RouteParams) {
 			util.POST("/parse", p.Utility.Parse)
 			util.POST("/convert", p.Utility.Convert)
 			util.POST("/generate-csr", p.Utility.GenerateCSR)
+			util.POST("/merge-chain", p.Utility.MergeChain)
 		}
 	}
 
