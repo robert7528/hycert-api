@@ -94,6 +94,8 @@ github.com/robert7528/hycore v0.1.0 h1:XoJsjKJSBl3J3p4BFed5qm8jIQYSjqcwR4RDvtfgt
 github.com/robert7528/hycore v0.1.0/go.mod h1:ONArp+TLlOl6IWB7YQfbkCNo6G7FXPhfhq5YlaU+RgY=
 github.com/robert7528/hycore v0.1.1 h1:yGI8Xv+Hou781uWgBOf58YnocNvraJcjf/zaOs2Y/7k=
 github.com/robert7528/hycore v0.1.1/go.mod h1:ONArp+TLlOl6IWB7YQfbkCNo6G7FXPhfhq5YlaU+RgY=
+github.com/robert7528/hycore v0.1.2 h1:gea2hTEXMPwQgTJjD6r+qLeM2Jx9rr9Er+OD4cJY6Ss=
+github.com/robert7528/hycore v0.1.2/go.mod h1:ONArp+TLlOl6IWB7YQfbkCNo6G7FXPhfhq5YlaU+RgY=
 github.com/rogpeppe/go-internal v1.9.0 h1:73kH8U+JUqXU8lRuOHeVHaa/SZPifC7BkcraZVejAe8=
 github.com/rogpeppe/go-internal v1.9.0/go.mod h1:WtVeX8xhTBvf0smdhujwtBcq4Qrzq/fJaraNFVN+nFs=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
