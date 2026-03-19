@@ -2,6 +2,10 @@ server:
   port: "8082"
   mode: "debug"
 
+database:
+  # DSN 由環境變數 DATABASE_DSN 覆蓋（共用 /etc/hysp/db.env）
+  dsn: ""
+
 log:
   level: "debug"
   filename: "logs/hycert-api.log"
