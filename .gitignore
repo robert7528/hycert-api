@@ -1,6 +1,9 @@
 # Binaries
 hycert-api
 hycert-api.exe
+hycert
+hycert.exe
+*.exe
 
 # Logs
 logs/
