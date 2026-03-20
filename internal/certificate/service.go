@@ -271,6 +271,52 @@ func (s *Service) Update(db *gorm.DB, id uint, req *UpdateRequest) (*Certificate
 	return &dto, nil
 }
 
+// UploadKey supplements a private key to an existing certificate.
+func (s *Service) UploadKey(db *gorm.DB, id uint, req *UploadKeyRequest) (*CertificateDTO, error) {
+	cert, err := s.repo.FindByID(db, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("certificate not found")
+		}
+		return nil, err
+	}
+
+	if cert.PrivateKeyEnc != "" {
+		return nil, fmt.Errorf("certificate already has a private key")
+	}
+
+	// Parse the private key
+	keyResult, err := s.parser.Parse([]byte(req.PrivateKey), req.Password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %w", err)
+	}
+	if keyResult.PrivateKey == nil {
+		return nil, fmt.Errorf("no private key found in input")
+	}
+
+	// Marshal to PKCS#8 PEM, then Tink-encrypt
+	keyDER, err := x509.MarshalPKCS8PrivateKey(keyResult.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal private key: %w", err)
+	}
+	keyPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}))
+
+	encrypted, err := s.enc.Encrypt(keyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt private key: %w", err)
+	}
+
+	cert.PrivateKeyEnc = encrypted
+	cert.KeyEncrypted = req.Password != ""
+
+	if err := s.repo.Update(db, cert); err != nil {
+		return nil, err
+	}
+
+	dto := cert.ToDTO()
+	return &dto, nil
+}
+
 // Delete soft-deletes a certificate by ID.
 func (s *Service) Delete(db *gorm.DB, id uint) error {
 	_, err := s.repo.FindByID(db, id)

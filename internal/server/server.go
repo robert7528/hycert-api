@@ -90,6 +90,7 @@ func RegisterRoutes(p RouteParams) {
 			certs.GET("/:id", p.CertHandler.Get)
 			certs.PUT("/:id", p.CertHandler.Update)
 			certs.DELETE("/:id", p.CertHandler.Delete)
+			certs.PUT("/:id/key", p.CertHandler.UploadKey)
 			certs.GET("/:id/download", p.CertHandler.Download)
 		}
 

@@ -101,6 +101,12 @@ type UpdateRequest struct {
 	Notes *string `json:"notes,omitempty"`
 }
 
+// UploadKeyRequest is the payload for supplementing a private key to an existing certificate.
+type UploadKeyRequest struct {
+	PrivateKey string `json:"private_key" binding:"required"`
+	Password   string `json:"password,omitempty"` // if the key is encrypted
+}
+
 // ListQuery captures query parameters for listing certificates.
 type ListQuery struct {
 	Page     int    `form:"page,default=1"`

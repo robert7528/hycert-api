@@ -122,6 +122,35 @@ func (h *Handler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": dto})
 }
 
+// UploadKey handles PUT /certificates/:id/key
+func (h *Handler) UploadKey(c *gin.Context) {
+	db := middleware.GetTenantDB(c)
+	if db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": gin.H{"code": "DB_UNAVAILABLE", "message": "tenant database unavailable"}})
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_ID", "message": "invalid certificate ID"}})
+		return
+	}
+
+	var req UploadKeyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+
+	dto, err := h.svc.UploadKey(db, uint(id), &req)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"success": false, "error": gin.H{"code": "UPLOAD_KEY_FAILED", "message": err.Error()}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": dto})
+}
+
 // Delete handles DELETE /certificates/:id
 func (h *Handler) Delete(c *gin.Context) {
 	db := middleware.GetTenantDB(c)
