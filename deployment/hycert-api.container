@@ -18,7 +18,8 @@ After=network.target
 Image=ghcr.io/robert7528/hycert-api:latest
 PublishPort=127.0.0.1:8082:8082
 
-# Secrets
+# Secrets (shared DB/JWT/Tink + module-specific)
+EnvironmentFile=/etc/hysp/db.env
 EnvironmentFile=/etc/hycert/api.env
 
 # 掛載工作目錄（放憑證檔等供 CLI 操作）
