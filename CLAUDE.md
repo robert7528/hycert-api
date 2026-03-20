@@ -12,7 +12,8 @@
 ```
 hycert-api/
 ├── cmd/
-│   └── server/main.go          # Cobra CLI → app.Run()
+│   ├── hycert/main.go          # Cobra CLI（主入口：serve / migrate / cert）
+│   └── server/main.go          # 舊入口（僅 serve，保留相容）
 ├── internal/
 │   ├── app/app.go              # fx DI 組裝（無 DB、無 Casbin）
 │   ├── server/server.go        # Gin routes + fx Lifecycle
@@ -86,6 +87,36 @@ sudo bash /hysp/hycert-api/deployment/deploy.sh
 cd /hysp/hycert-api
 sudo bash deployment/deploy.sh
 ```
+
+## CLI 使用方式
+
+容器內二進位路徑：`/app/hycert`
+
+### Windows 本機開發（有 Go runtime）
+```bash
+cd D:\HySP\hycert-api
+go run ./cmd/hycert --help
+go run ./cmd/hycert cert verify --file ./testdata/server.cer
+go run ./cmd/hycert cert parse --file ./testdata/server.cer
+go run ./cmd/hycert serve
+```
+
+### Linux 部署環境（透過 Podman 容器執行）
+```bash
+# 透過容器執行 CLI
+podman exec systemd-hycert-api ./hycert --help
+podman exec systemd-hycert-api ./hycert cert verify --file /path/to/server.cer
+podman exec systemd-hycert-api ./hycert cert parse --file /path/to/server.cer
+
+# 如需處理主機上的檔案，掛載目錄進容器
+podman exec -v /tmp/certs:/certs:ro systemd-hycert-api ./hycert cert verify --file /certs/server.cer
+
+# 服務與遷移由容器 entrypoint 管理，通常不需手動執行
+# 若需手動遷移：
+podman exec systemd-hycert-api ./hycert migrate tenant --code system
+```
+
+> **注意**：Linux 主機上 `/hysp/hycert-api/` 只有原始碼與部署腳本，沒有 Go runtime，不能直接 `go run`。
 
 ## nginx
 

@@ -8,18 +8,18 @@ WORKDIR /app
 COPY go.mod go.su[m] ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -o hycert-api ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -o hycert ./cmd/hycert
 
 FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
-COPY --from=builder /app/hycert-api .
+COPY --from=builder /app/hycert .
 COPY configs/ configs/
-COPY deployment/entrypoint.sh entrypoint.sh
-RUN chmod +x entrypoint.sh
+COPY migrations/ migrations/
 
 RUN mkdir -p logs
 
 EXPOSE 8082
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["./hycert"]
+CMD ["serve"]
