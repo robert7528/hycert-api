@@ -33,6 +33,13 @@ func (r *Repository) FindAll(db *gorm.DB, q *DeploymentListQuery) ([]Deployment,
 	if q.CertificateID > 0 {
 		tx = tx.Where("certificate_id = ?", q.CertificateID)
 	}
+	if q.Search != "" {
+		like := "%" + q.Search + "%"
+		tx = tx.Where("target_host ILIKE ? OR target_service ILIKE ?", like, like)
+	}
+	if q.Status != "" {
+		tx = tx.Where("status = ?", q.Status)
+	}
 
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
