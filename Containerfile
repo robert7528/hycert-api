@@ -17,9 +17,9 @@ WORKDIR /app
 COPY --from=builder /app/hycert .
 COPY configs/ configs/
 COPY migrations/ migrations/
+COPY deployment/entrypoint.sh .
 
-RUN mkdir -p logs
+RUN chmod +x entrypoint.sh && mkdir -p logs
 
 EXPOSE 8082
-ENTRYPOINT ["./hycert"]
-CMD ["serve"]
+ENTRYPOINT ["./entrypoint.sh"]
