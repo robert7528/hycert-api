@@ -8,6 +8,26 @@ env:
   IMAGE: ghcr.io/robert7528/hycert-api
 
 jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+        env:
+          GOPROXY: direct
+          GONOSUMDB: github.com/robert7528/hycore
+          GONOSUMCHECK: github.com/robert7528/hycore
+
   build:
     runs-on: ubuntu-latest
     permissions:
