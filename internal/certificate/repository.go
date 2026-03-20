@@ -46,7 +46,7 @@ func (r *Repository) FindAll(db *gorm.DB, q *ListQuery) ([]Certificate, int64, e
 	}
 	if q.Search != "" {
 		like := "%" + q.Search + "%"
-		tx = tx.Where("common_name ILIKE ? OR sans::text ILIKE ?", like, like)
+		tx = tx.Where("name ILIKE ? OR common_name ILIKE ? OR sans::text ILIKE ?", like, like, like)
 	}
 	if q.ExpireIn > 0 {
 		tx = tx.Where("not_after <= NOW() + INTERVAL '1 day' * ? AND not_after > NOW()", q.ExpireIn)
