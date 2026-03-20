@@ -351,7 +351,7 @@ func (s *Service) MergeChain(req *MergeChainRequest) (*MergeChainResponse, error
 	}
 
 	// Order the chain: leaf → intermediate(s) → root
-	ordered := orderChain(allCerts)
+	ordered := OrderChain(allCerts)
 
 	// Build PEM output
 	var pemBuilder strings.Builder
@@ -375,9 +375,10 @@ func (s *Service) MergeChain(req *MergeChainRequest) (*MergeChainResponse, error
 	}, nil
 }
 
-// orderChain sorts certificates into chain order: leaf → intermediate(s) → root.
+// OrderChain sorts certificates into chain order: leaf → intermediate(s) → root.
 // Uses Subject/Issuer matching to build the chain from leaf upward.
-func orderChain(certs []*x509.Certificate) []*x509.Certificate {
+// Exported for reuse by certificate import flow.
+func OrderChain(certs []*x509.Certificate) []*x509.Certificate {
 	if len(certs) <= 1 {
 		return certs
 	}

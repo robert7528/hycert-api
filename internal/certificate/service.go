@@ -15,6 +15,7 @@ import (
 	"github.com/hysp/hycert-api/internal/chain"
 	"github.com/hysp/hycert-api/internal/converter"
 	"github.com/hysp/hycert-api/internal/parser"
+	"github.com/hysp/hycert-api/internal/utility"
 	"github.com/robert7528/hycore/crypto"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -66,9 +67,9 @@ func (s *Service) Import(db *gorm.DB, req *ImportRequest, username string) (*Imp
 		return nil, fmt.Errorf("no certificate found in input")
 	}
 
-	// Identify the leaf cert: prefer non-CA cert; if all are CA, pick the one
-	// whose Subject is not the Issuer of any other cert in the set.
-	leaf := findLeaf(result.Certificates)
+	// Order certificates: leaf → intermediate(s) → root (reuse toolbox logic)
+	ordered := utility.OrderChain(result.Certificates)
+	leaf := ordered[0]
 
 	// 2. Extract metadata
 	cn := leaf.Subject.CommonName
@@ -85,12 +86,10 @@ func (s *Service) Import(db *gorm.DB, req *ImportRequest, username string) (*Imp
 		return nil, fmt.Errorf("certificate already exists (id=%d, cn=%s)", existing.ID, existing.CommonName)
 	}
 
-	// 4. Build chain (AIA chasing) — all certs except the leaf are intermediates
+	// 4. Build chain (AIA chasing) — ordered[1:] are intermediates/root
 	var intermediates []*x509.Certificate
-	for _, c := range result.Certificates {
-		if c != leaf {
-			intermediates = append(intermediates, c)
-		}
+	if len(ordered) > 1 {
+		intermediates = ordered[1:]
 	}
 	chainResult := s.builder.BuildChain(leaf, intermediates)
 
@@ -425,39 +424,6 @@ func computeSHA256Fingerprint(cert *x509.Certificate) string {
 		parts[i] = fmt.Sprintf("%02X", b)
 	}
 	return strings.Join(parts, ":")
-}
-
-// findLeaf identifies the leaf certificate from a set of certificates.
-// Priority: non-CA cert → cert whose Subject is not the Issuer of any other cert.
-func findLeaf(certs []*x509.Certificate) *x509.Certificate {
-	if len(certs) == 1 {
-		return certs[0]
-	}
-
-	// 1. Prefer non-CA cert (end-entity)
-	for _, c := range certs {
-		if !c.IsCA {
-			return c
-		}
-	}
-
-	// 2. All are CA: find the one whose Subject CN is not the Issuer CN of any other cert
-	issuerCNs := make(map[string]bool)
-	for _, c := range certs {
-		issuerCNs[c.Issuer.CommonName] = true
-	}
-	for _, c := range certs {
-		// Self-signed root is always an issuer of something; skip it
-		if c.Subject.CommonName == c.Issuer.CommonName {
-			continue
-		}
-		if !issuerCNs[c.Subject.CommonName] {
-			return c
-		}
-	}
-
-	// 3. Fallback: first cert
-	return certs[0]
 }
 
 func extractSANsList(cert *x509.Certificate) []string {
