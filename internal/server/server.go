@@ -6,13 +6,19 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hysp/hycert-api/internal/certificate"
+	"github.com/hysp/hycert-api/internal/csr"
+	"github.com/hysp/hycert-api/internal/deployment"
 	"github.com/hysp/hycert-api/internal/health"
 	"github.com/hysp/hycert-api/internal/utility"
 	coreauth "github.com/robert7528/hycore/auth"
+	coreauditlog "github.com/robert7528/hycore/auditlog"
 	"github.com/robert7528/hycore/config"
+	"github.com/robert7528/hycore/database"
 	"github.com/robert7528/hycore/middleware"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type Server struct {
@@ -30,10 +36,17 @@ func New(cfg *config.Config, log *zap.Logger) *Server {
 // RouteParams groups all handler dependencies for fx injection.
 type RouteParams struct {
 	fx.In
-	Server  *Server
-	Health  *health.Handler
-	AuthSvc *coreauth.Service
-	Utility *utility.Handler
+	Server    *Server
+	Health    *health.Handler
+	AuthSvc   *coreauth.Service
+	Utility   *utility.Handler
+	DB        *gorm.DB
+	DBManager *database.DBManager
+
+	// CRUD handlers
+	CertHandler   *certificate.Handler
+	CSRHandler    *csr.Handler
+	DeployHandler *deployment.Handler
 }
 
 func RegisterRoutes(p RouteParams) {
@@ -48,6 +61,8 @@ func RegisterRoutes(p RouteParams) {
 	// ── Admin routes (JWT-protected) ────────────────────────────────────
 	adm := api.Group("/adm/cert")
 	adm.Use(middleware.AuthMiddleware(p.AuthSvc))
+
+	// Utility (no tenant DB needed)
 	{
 		util := adm.Group("/utility")
 		{
@@ -57,6 +72,45 @@ func RegisterRoutes(p RouteParams) {
 			util.POST("/generate-csr", p.Utility.GenerateCSR)
 			util.POST("/merge-chain", p.Utility.MergeChain)
 			util.POST("/decrypt-key", p.Utility.DecryptKey)
+		}
+	}
+
+	// CRUD (tenant DB + audit middleware)
+	{
+		crud := adm.Group("")
+		crud.Use(middleware.TenantMiddleware())
+		crud.Use(middleware.TenantDBMiddleware(p.DBManager))
+		crud.Use(coreauditlog.AuditMiddleware(p.DB))
+
+		// Certificates
+		certs := crud.Group("/certificates")
+		{
+			certs.POST("", p.CertHandler.Import)
+			certs.GET("", p.CertHandler.List)
+			certs.GET("/:id", p.CertHandler.Get)
+			certs.PUT("/:id", p.CertHandler.Update)
+			certs.DELETE("/:id", p.CertHandler.Delete)
+			certs.GET("/:id/download", p.CertHandler.Download)
+		}
+
+		// CSRs
+		csrs := crud.Group("/csrs")
+		{
+			csrs.POST("", p.CSRHandler.Generate)
+			csrs.GET("", p.CSRHandler.List)
+			csrs.GET("/:id", p.CSRHandler.Get)
+			csrs.DELETE("/:id", p.CSRHandler.Delete)
+			csrs.GET("/:id/download", p.CSRHandler.Download)
+		}
+
+		// Deployments
+		deploys := crud.Group("/deployments")
+		{
+			deploys.POST("", p.DeployHandler.Create)
+			deploys.GET("", p.DeployHandler.List)
+			deploys.GET("/:id", p.DeployHandler.Get)
+			deploys.PUT("/:id", p.DeployHandler.Update)
+			deploys.DELETE("/:id", p.DeployHandler.Delete)
 		}
 	}
 

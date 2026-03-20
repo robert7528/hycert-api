@@ -23,3 +23,39 @@ type Deployment struct {
 	UpdatedAt     time.Time      `json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
 }
+
+// CreateDeploymentRequest is the payload for creating a deployment record.
+type CreateDeploymentRequest struct {
+	CertificateID uint   `json:"certificate_id" binding:"required"`
+	TargetHost    string `json:"target_host" binding:"required"`
+	TargetService string `json:"target_service" binding:"required"`
+	TargetDetail  string `json:"target_detail,omitempty"`
+	Port          *int   `json:"port,omitempty"`
+	Notes         string `json:"notes,omitempty"`
+}
+
+// UpdateDeploymentRequest is the payload for updating a deployment record.
+type UpdateDeploymentRequest struct {
+	TargetHost    *string `json:"target_host,omitempty"`
+	TargetService *string `json:"target_service,omitempty"`
+	TargetDetail  *string `json:"target_detail,omitempty"`
+	Port          *int    `json:"port,omitempty"`
+	Status        *string `json:"status,omitempty"`
+	Notes         *string `json:"notes,omitempty"`
+}
+
+// DeploymentListQuery captures query parameters for listing deployments.
+type DeploymentListQuery struct {
+	Page          int  `form:"page,default=1"`
+	PageSize      int  `form:"page_size,default=20"`
+	CertificateID uint `form:"certificate_id"`
+}
+
+// DeploymentListResponse wraps a paginated list of deployments.
+type DeploymentListResponse struct {
+	Items      []Deployment `json:"items"`
+	Total      int64        `json:"total"`
+	Page       int          `json:"page"`
+	PageSize   int          `json:"page_size"`
+	TotalPages int          `json:"total_pages"`
+}

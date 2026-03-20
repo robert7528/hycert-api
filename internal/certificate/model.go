@@ -56,3 +56,74 @@ type CertificateDTO struct {
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 }
+
+// ToDTO converts a Certificate entity to its API representation.
+func (c *Certificate) ToDTO() CertificateDTO {
+	return CertificateDTO{
+		ID:                c.ID,
+		Name:              c.Name,
+		CommonName:        c.CommonName,
+		SANs:              c.SANs,
+		SerialNumber:      c.SerialNumber,
+		IssuerCN:          c.IssuerCN,
+		NotBefore:         c.NotBefore,
+		NotAfter:          c.NotAfter,
+		KeyAlgorithm:      c.KeyAlgorithm,
+		FingerprintSHA256: c.FingerprintSHA256,
+		Status:            c.Status,
+		Source:            c.Source,
+		HasPrivateKey:     c.PrivateKeyEnc != "",
+		KeyEncrypted:      c.KeyEncrypted,
+		CSRID:             c.CSRID,
+		Tags:              c.Tags,
+		Notes:             c.Notes,
+		CreatedBy:         c.CreatedBy,
+		CreatedAt:         c.CreatedAt,
+		UpdatedAt:         c.UpdatedAt,
+	}
+}
+
+// ImportRequest is the payload for importing a certificate.
+type ImportRequest struct {
+	Certificate string `json:"certificate" binding:"required"` // PEM or base64-encoded binary
+	PrivateKey  string `json:"private_key,omitempty"`
+	InputType   string `json:"input_type,omitempty"`   // auto | pem | der_base64 | pfx_base64 | jks_base64
+	Password    string `json:"password,omitempty"`     // for PFX/JKS input
+	Name        string `json:"name,omitempty"`         // user-defined display name
+	Tags        string `json:"tags,omitempty"`         // JSON array
+	Notes       string `json:"notes,omitempty"`
+}
+
+// UpdateRequest is the payload for updating certificate metadata.
+type UpdateRequest struct {
+	Name  *string `json:"name,omitempty"`
+	Tags  *string `json:"tags,omitempty"`
+	Notes *string `json:"notes,omitempty"`
+}
+
+// ListQuery captures query parameters for listing certificates.
+type ListQuery struct {
+	Page     int    `form:"page,default=1"`
+	PageSize int    `form:"page_size,default=20"`
+	Status   string `form:"status"`
+	Search   string `form:"search"`           // CN or SAN substring
+	ExpireIn int    `form:"expire_in"`         // days until expiry (filter certs expiring within N days)
+	SortBy   string `form:"sort_by,default=created_at"`
+	SortDir  string `form:"sort_dir,default=desc"`
+}
+
+// DownloadQuery captures query parameters for downloading a certificate.
+type DownloadQuery struct {
+	Format       string `form:"format,default=pem"` // pem | pfx | jks | der
+	Password     string `form:"password"`           // required for pfx/jks
+	IncludeChain *bool  `form:"include_chain"`
+}
+
+// ListResponse wraps a paginated list of certificates.
+type ListResponse struct {
+	Items      []CertificateDTO `json:"items"`
+	Total      int64            `json:"total"`
+	Page       int              `json:"page"`
+	PageSize   int              `json:"page_size"`
+	TotalPages int              `json:"total_pages"`
+}

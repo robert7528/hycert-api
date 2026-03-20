@@ -13,3 +13,6 @@ log:
 jwt:
   expiry_hours: 24
   # secret: override via JWT_SECRET env (must match hyadmin-api)
+
+tink:
+  # keyset: override via TINK_KEYSET env (JSON keyset for private key encryption)
