@@ -120,9 +120,10 @@ type ListQuery struct {
 
 // DownloadQuery captures query parameters for downloading a certificate.
 type DownloadQuery struct {
-	Format       string `form:"format,default=pem"` // pem | pfx | jks | der
+	Format       string `form:"format,default=pem"` // pem | key | pfx | jks | der
 	Password     string `form:"password"`           // required for pfx/jks
 	IncludeChain *bool  `form:"include_chain"`
+	IncludeKey   bool   `form:"include_key"`        // for pem: merge private key into PEM (HAProxy)
 }
 
 // ListResponse wraps a paginated list of certificates.

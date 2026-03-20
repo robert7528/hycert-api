@@ -347,12 +347,27 @@ func (s *Service) Download(db *gorm.DB, id uint, q *DownloadQuery) (*converter.C
 		format = "pem"
 	}
 
-	// For PEM, return the stored PEM directly (includes chain)
+	// Private key download (standalone .key file)
+	if format == "key" {
+		if cert.PrivateKeyEnc == "" {
+			return nil, fmt.Errorf("this certificate has no private key stored")
+		}
+		keyPEM, err := s.enc.Decrypt(cert.PrivateKeyEnc)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt private key: %w", err)
+		}
+		return &converter.ConvertResult{
+			Data:         []byte(keyPEM),
+			Format:       "key",
+			FilenameSugg: cert.CommonName + ".key",
+		}, nil
+	}
+
+	// PEM: cert + chain, optionally include private key (for HAProxy etc.)
 	if format == "pem" {
-		includeKey := cert.PrivateKeyEnc != ""
 		data := cert.CertPEM
 
-		if includeKey {
+		if q.IncludeKey && cert.PrivateKeyEnc != "" {
 			keyPEM, err := s.enc.Decrypt(cert.PrivateKeyEnc)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decrypt private key: %w", err)
