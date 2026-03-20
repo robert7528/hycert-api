@@ -28,7 +28,10 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 
-echo "=== [3/4] Pull & start container ==="
+echo "=== [3/5] Create data directory ==="
+mkdir -p /hysp/hycert/data
+
+echo "=== [4/5] Pull & start container ==="
 podman pull "$IMAGE"
 
 cp "$QUADLET_SRC" "$QUADLET_DEST"
@@ -36,7 +39,7 @@ systemctl daemon-reload
 systemctl restart hycert-api
 systemctl status hycert-api --no-pager
 
-echo "=== [4/4] Install nginx config ==="
+echo "=== [5/5] Install nginx config ==="
 mkdir -p "$(dirname "$NGINX_DEST")"
 cp "$NGINX_SRC" "$NGINX_DEST"
 nginx -t && systemctl reload nginx

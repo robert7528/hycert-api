@@ -21,6 +21,9 @@ PublishPort=127.0.0.1:8082:8082
 # Secrets
 EnvironmentFile=/etc/hycert/api.env
 
+# 掛載工作目錄（放憑證檔等供 CLI 操作）
+Volume=/hysp/hycert/data:/data:rw
+
 # Log
 LogDriver=journald
 
