@@ -1,6 +1,8 @@
 package app
 
 import (
+	"github.com/hysp/hycert-api/internal/acme"
+	"github.com/hysp/hycert-api/internal/agent"
 	"github.com/hysp/hycert-api/internal/certificate"
 	"github.com/hysp/hycert-api/internal/chain"
 	"github.com/hysp/hycert-api/internal/converter"
@@ -8,6 +10,7 @@ import (
 	"github.com/hysp/hycert-api/internal/deployment"
 	"github.com/hysp/hycert-api/internal/health"
 	"github.com/hysp/hycert-api/internal/parser"
+	"github.com/hysp/hycert-api/internal/scheduler"
 	"github.com/hysp/hycert-api/internal/server"
 	"github.com/hysp/hycert-api/internal/utility"
 	coreauth "github.com/robert7528/hycore/auth"
@@ -15,7 +18,9 @@ import (
 	corecrypto "github.com/robert7528/hycore/crypto"
 	"github.com/robert7528/hycore/database"
 	"github.com/robert7528/hycore/logger"
+	"github.com/spf13/viper"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
 func Run() error {
@@ -72,9 +77,38 @@ func Run() error {
 
 			// Health
 			health.NewHandler,
+
+			// ── New: Agent ──────────────────────────────────────────────
+			agent.NewRepository,
+			agent.NewService,
+			agent.NewHandler,
+
+			// ── New: ACME ───────────────────────────────────────────────
+			acme.NewRepository,
+			acme.NewHandler,
+			// LegoClient needs httpChallengePort from config
+			func(log *zap.Logger) *acme.LegoClient {
+				port := viper.GetString("acme.http_challenge_port")
+				if port == "" {
+					port = "80"
+				}
+				return acme.NewLegoClient(log, port)
+			},
+			acme.NewService,
+
+			// ── New: Scheduler ──────────────────────────────────────────
+			func() *scheduler.Config {
+				return &scheduler.Config{
+					Enabled:         viper.GetBool("scheduler.enabled"),
+					RenewalCron:     viper.GetString("scheduler.renewal_cron"),
+					RenewBeforeDays: viper.GetInt("scheduler.renewal_before_days"),
+				}
+			},
+			scheduler.New,
 		),
 		fx.Invoke(server.RegisterRoutes),
 		fx.Invoke(server.Start),
+		fx.Invoke(scheduler.RegisterJobs),
 	)
 	app.Run()
 	return nil

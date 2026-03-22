@@ -15,13 +15,17 @@ type Deployment struct {
 	TargetService string        `gorm:"not null" json:"target_service"`     // nginx / apache / tomcat / k8s
 	TargetDetail  string         `gorm:"type:text" json:"target_detail"`    // path, namespace, etc.
 	Port          *int           `json:"port"`
-	Status        string         `gorm:"default:'active'" json:"status"`    // active / removed
-	DeployedAt    *time.Time     `json:"deployed_at"`
-	DeployedBy    string         `json:"deployed_by"`
-	Notes         string         `gorm:"type:text" json:"notes"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+	Status          string         `gorm:"default:'active'" json:"status"`    // active / removed
+	DeployedAt      *time.Time     `json:"deployed_at"`
+	DeployedBy      string         `json:"deployed_by"`
+	Notes           string         `gorm:"type:text" json:"notes"`
+	LastFingerprint string         `json:"last_fingerprint,omitempty"`
+	LastDeployedAt  *time.Time     `json:"last_deployed_at,omitempty"`
+	AgentTokenID    *uint          `json:"agent_token_id,omitempty"`
+	DeployStatus    string         `gorm:"default:'pending'" json:"deploy_status"` // pending / deploying / deployed / failed
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // CreateDeploymentRequest is the payload for creating a deployment record.

@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hysp/hycert-api/internal/acme"
+	"github.com/hysp/hycert-api/internal/agent"
 	"github.com/hysp/hycert-api/internal/certificate"
 	"github.com/hysp/hycert-api/internal/csr"
 	"github.com/hysp/hycert-api/internal/deployment"
@@ -47,6 +49,13 @@ type RouteParams struct {
 	CertHandler   *certificate.Handler
 	CSRHandler    *csr.Handler
 	DeployHandler *deployment.Handler
+
+	// Agent handler
+	AgentHandler *agent.Handler
+	AgentSvc     *agent.Service
+
+	// ACME handler
+	AcmeHandler *acme.Handler
 }
 
 func RegisterRoutes(p RouteParams) {
@@ -72,6 +81,17 @@ func RegisterRoutes(p RouteParams) {
 			util.POST("/generate-csr", p.Utility.GenerateCSR)
 			util.POST("/merge-chain", p.Utility.MergeChain)
 			util.POST("/decrypt-key", p.Utility.DecryptKey)
+		}
+	}
+
+	// Agent Token management (JWT + admin DB, no tenant DB needed)
+	{
+		tokens := adm.Group("/agent-tokens")
+		{
+			tokens.POST("", p.AgentHandler.CreateToken)
+			tokens.GET("", p.AgentHandler.ListTokens)
+			tokens.GET("/:id", p.AgentHandler.GetToken)
+			tokens.DELETE("/:id", p.AgentHandler.RevokeToken)
 		}
 	}
 
@@ -112,15 +132,38 @@ func RegisterRoutes(p RouteParams) {
 			deploys.GET("/:id", p.DeployHandler.Get)
 			deploys.PUT("/:id", p.DeployHandler.Update)
 			deploys.DELETE("/:id", p.DeployHandler.Delete)
+			deploys.GET("/:id/history", p.AgentHandler.GetDeploymentHistory)
+		}
+
+		// ACME Accounts
+		acmeAccts := crud.Group("/acme/accounts")
+		{
+			acmeAccts.POST("", p.AcmeHandler.CreateAccount)
+			acmeAccts.GET("", p.AcmeHandler.ListAccounts)
+			acmeAccts.GET("/:id", p.AcmeHandler.GetAccount)
+			acmeAccts.PUT("/:id", p.AcmeHandler.UpdateAccount)
+			acmeAccts.DELETE("/:id", p.AcmeHandler.DeleteAccount)
+		}
+
+		// ACME Orders
+		acmeOrders := crud.Group("/acme/orders")
+		{
+			acmeOrders.POST("", p.AcmeHandler.CreateOrder)
+			acmeOrders.GET("", p.AcmeHandler.ListOrders)
+			acmeOrders.GET("/:id", p.AcmeHandler.GetOrder)
+			acmeOrders.POST("/:id/renew", p.AcmeHandler.RenewOrder)
+			acmeOrders.DELETE("/:id", p.AcmeHandler.CancelOrder)
 		}
 	}
 
-	// ── Agent routes (future) ───────────────────────────────────────────
-	// agent := api.Group("/agent/cert")
-	// agent.Use(agentAuthMiddleware)
-
-	// ── Public API routes (future) ──────────────────────────────────────
-	// pub := api.Group("/pub/cert")
+	// ── Agent routes (Agent Token auth) ─────────────────────────────────
+	agentGroup := api.Group("/agent/cert")
+	agentGroup.Use(agent.AgentAuthMiddleware(p.AgentSvc, p.DB, p.DBManager, p.Server.log))
+	{
+		agentGroup.GET("/deployments", p.AgentHandler.AgentGetDeployments)
+		agentGroup.GET("/certificates/:id/download", p.AgentHandler.AgentDownloadCert)
+		agentGroup.PUT("/deployments/:id/status", p.AgentHandler.AgentUpdateDeployStatus)
+	}
 }
 
 func Start(lc fx.Lifecycle, s *Server) {

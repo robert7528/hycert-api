@@ -10,15 +10,39 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const tenantMigrationsDir = "migrations/tenant"
+const (
+	adminMigrationsDir  = "migrations/admin"
+	tenantMigrationsDir = "migrations/tenant"
+)
 
 func migrateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate",
 		Short: "Run database migrations",
 	}
-	cmd.AddCommand(migrateTenantCmd(), migrateAllTenantsCmd())
+	cmd.AddCommand(migrateAdminCmd(), migrateTenantCmd(), migrateAllTenantsCmd())
 	return cmd
+}
+
+func migrateAdminCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "admin",
+		Short: "Apply hycert admin DB migrations (agent tokens, etc.)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg := config.Load()
+			adminDB, err := database.Connect(cfg)
+			if err != nil {
+				return fmt.Errorf("connect admin DB: %w", err)
+			}
+
+			fmt.Println("Applying hycert admin migrations...")
+			if err := migrator.Admin(context.Background(), adminDB, adminMigrationsDir); err != nil {
+				return err
+			}
+			fmt.Println("Admin migrations applied successfully.")
+			return nil
+		},
+	}
 }
 
 func migrateTenantCmd() *cobra.Command {

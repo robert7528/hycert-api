@@ -16,3 +16,11 @@ jwt:
 
 tink:
   # keyset: override via TINK_KEYSET env (JSON keyset for private key encryption)
+
+scheduler:
+  enabled: true
+  renewal_cron: "0 3 * * *"        # 每日 3:00 AM
+  renewal_before_days: 30           # 到期前 N 天開始續約
+
+acme:
+  http_challenge_port: "80"         # HTTP-01 challenge 用
