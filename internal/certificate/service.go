@@ -177,8 +177,33 @@ func (s *Service) Import(db *gorm.DB, req *ImportRequest, username string) (*Imp
 		CreatedBy:         username,
 	}
 
+	// 8b. Auto-link pending CSR by CN match
+	var matchedCSR struct {
+		ID            uint   `gorm:"primaryKey"`
+		PrivateKeyEnc string `gorm:"column:private_key_enc"`
+	}
+	csrMatch := db.Table("hycert_csrs").
+		Where("common_name = ? AND status = ? AND deleted_at IS NULL", cn, "pending").
+		First(&matchedCSR)
+	if csrMatch.Error == nil && matchedCSR.ID > 0 {
+		cert.Source = "csr"
+		cert.CSRID = &matchedCSR.ID
+		// Copy private key from CSR if cert has none
+		if cert.PrivateKeyEnc == "" && matchedCSR.PrivateKeyEnc != "" {
+			cert.PrivateKeyEnc = matchedCSR.PrivateKeyEnc
+		}
+	}
+
 	if err := s.repo.Create(db, cert); err != nil {
 		return nil, fmt.Errorf("failed to save certificate: %w", err)
+	}
+
+	// Update CSR status to signed (after cert is saved with ID)
+	if cert.CSRID != nil {
+		db.Table("hycert_csrs").Where("id = ?", *cert.CSRID).Updates(map[string]interface{}{
+			"status":         "signed",
+			"certificate_id": cert.ID,
+		})
 	}
 
 	// 9. Build warnings
