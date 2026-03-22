@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS hycert_agent_tokens (
     id              BIGSERIAL PRIMARY KEY,
     name            VARCHAR(255) NOT NULL,
     token_hash      VARCHAR(255) NOT NULL UNIQUE,
-    token_prefix    VARCHAR(10) NOT NULL,        -- 前 8 碼，用於 UI 識別
+    token_prefix    VARCHAR(20) NOT NULL,        -- "hycert_agt_" + 前 8 hex，用於 UI 識別
     tenant_code     VARCHAR(100) NOT NULL,
     allowed_hosts   JSONB DEFAULT '[]',          -- 限制主機名，空 = 不限
     last_used_at    TIMESTAMPTZ,
