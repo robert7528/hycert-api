@@ -1,9 +1,10 @@
 FROM golang:1.25-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
-ENV GOPROXY=direct
+ENV GOPROXY=https://proxy.golang.org,direct
 ENV GONOSUMDB=github.com/robert7528/hycore
 ENV GONOSUMCHECK=github.com/robert7528/hycore
+ENV GOPRIVATE=github.com/robert7528/hycore
 WORKDIR /app
 COPY go.mod go.su[m] ./
 RUN go mod download
