@@ -163,50 +163,6 @@ func (s *Service) Authenticate(adminDB *gorm.DB, rawToken string) (*AgentToken, 
 
 // ── Agent Deployment Operations ─────────────────────────────────────────────
 
-// GetDeployments returns deployment targets for a specific host.
-func (s *Service) GetDeployments(tenantDB *gorm.DB, host string) ([]AgentDeploymentDTO, error) {
-	type deployRow struct {
-		ID              uint
-		CertificateID   uint
-		TargetHost      string
-		TargetService   string
-		TargetDetail    string
-		Port            *int
-		DeployStatus    string
-		LastFingerprint string
-		CertFingerprint string
-	}
-
-	var rows []deployRow
-	err := tenantDB.Raw(`
-		SELECT d.id, d.certificate_id, d.target_host, d.target_service,
-		       d.target_detail, d.port, d.deploy_status, d.last_fingerprint,
-		       c.fingerprint_sha256 AS cert_fingerprint
-		FROM hycert_deployments d
-		JOIN hycert_certificates c ON c.id = d.certificate_id AND c.deleted_at IS NULL
-		WHERE d.target_host = ? AND d.status = 'active' AND d.deleted_at IS NULL
-	`, host).Scan(&rows).Error
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]AgentDeploymentDTO, 0, len(rows))
-	for _, r := range rows {
-		result = append(result, AgentDeploymentDTO{
-			ID:              r.ID,
-			CertificateID:   r.CertificateID,
-			TargetHost:      r.TargetHost,
-			TargetService:   r.TargetService,
-			TargetDetail:    r.TargetDetail,
-			Port:            r.Port,
-			DeployStatus:    r.DeployStatus,
-			LastFingerprint: r.LastFingerprint,
-			CertFingerprint: r.CertFingerprint,
-		})
-	}
-	return result, nil
-}
-
 // UpdateDeployStatus records a deployment status update from an agent.
 func (s *Service) UpdateDeployStatus(tenantDB *gorm.DB, deploymentID uint, tokenID uint, req *UpdateDeployStatusRequest) error {
 	// Verify deployment exists

@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -56,29 +55,6 @@ func AgentAuthMiddleware(svc *Service, adminDB *gorm.DB, dbMgr *database.DBManag
 				"error":   gin.H{"code": "UNAUTHORIZED", "message": err.Error()},
 			})
 			return
-		}
-
-		// Check allowed_hosts restriction (only for legacy host-based mode)
-		agentID := c.GetHeader("X-Agent-ID")
-		host := c.Query("host")
-		if agentID == "" && host != "" && token.AllowedHosts != "" && token.AllowedHosts != "[]" {
-			var allowed []string
-			if err := json.Unmarshal([]byte(token.AllowedHosts), &allowed); err == nil && len(allowed) > 0 {
-				found := false
-				for _, h := range allowed {
-					if h == host {
-						found = true
-						break
-					}
-				}
-				if !found {
-					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-						"success": false,
-						"error":   gin.H{"code": "FORBIDDEN", "message": "host not in allowed_hosts for this token"},
-					})
-					return
-				}
-			}
 		}
 
 		// Resolve tenant DB

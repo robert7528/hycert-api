@@ -149,9 +149,8 @@ func (h *Handler) GetDeploymentHistory(c *gin.Context) {
 // ── Agent API Endpoints ─────────────────────────────────────────────────────
 
 // AgentGetDeployments handles GET /agent/cert/deployments
-// Supports two modes:
-//   - X-Agent-ID header: lookup by agent_id (new)
-//   - ?host= query param: lookup by target_host (legacy)
+// AgentGetDeployments handles GET /agent/cert/deployments
+// Requires X-Agent-ID header to identify the agent.
 func (h *Handler) AgentGetDeployments(c *gin.Context) {
 	db := GetAgentTenantDB(c)
 	if db == nil {
@@ -160,21 +159,12 @@ func (h *Handler) AgentGetDeployments(c *gin.Context) {
 	}
 
 	agentID := c.GetHeader("X-Agent-ID")
-	host := c.Query("host")
-
-	var deployments []AgentDeploymentDTO
-	var err error
-
-	if agentID != "" {
-		// New mode: lookup by agent_id
-		deployments, err = h.svc.GetDeploymentsByAgentID(db, agentID)
-	} else if host != "" {
-		// Legacy mode: lookup by target_host
-		deployments, err = h.svc.GetDeployments(db, host)
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_REQUEST", "message": "X-Agent-ID header or host query parameter is required"}})
+	if agentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_REQUEST", "message": "X-Agent-ID header is required"}})
 		return
 	}
+
+	deployments, err := h.svc.GetDeploymentsByAgentID(db, agentID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": gin.H{"code": "QUERY_FAILED", "message": err.Error()}})
