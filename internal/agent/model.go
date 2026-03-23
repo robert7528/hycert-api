@@ -149,6 +149,7 @@ type AgentRegistration struct {
 	IPAddresses  string         `gorm:"type:jsonb;default:'[]'" json:"ip_addresses"`
 	OS           string         `gorm:"default:''" json:"os"`
 	Version      string         `gorm:"default:''" json:"version"`
+	PollInterval int            `gorm:"column:poll_interval;default:3600" json:"poll_interval"`
 	Status       string         `gorm:"default:'active'" json:"status"`
 	LastSeenAt   *time.Time     `json:"last_seen_at"`
 	CreatedAt    time.Time      `json:"created_at"`
@@ -165,6 +166,7 @@ type AgentRegistrationDTO struct {
 	IPAddresses  string     `json:"ip_addresses"`
 	OS           string     `json:"os"`
 	Version      string     `json:"version"`
+	PollInterval int        `json:"poll_interval"`
 	Status       string     `json:"status"`
 	LastSeenAt   *time.Time `json:"last_seen_at"`
 	CreatedAt    time.Time  `json:"created_at"`
@@ -181,6 +183,7 @@ func (r *AgentRegistration) ToDTO() AgentRegistrationDTO {
 		IPAddresses:  r.IPAddresses,
 		OS:           r.OS,
 		Version:      r.Version,
+		PollInterval: r.PollInterval,
 		Status:       r.Status,
 		LastSeenAt:   r.LastSeenAt,
 		CreatedAt:    r.CreatedAt,
@@ -195,6 +198,7 @@ type RegisterAgentRequest struct {
 	IPAddresses []string `json:"ip_addresses,omitempty"`
 	OS          string   `json:"os,omitempty"`
 	Version     string   `json:"version,omitempty"`
+	Interval    int      `json:"interval,omitempty"`
 }
 
 type AgentRegistrationListQuery struct {

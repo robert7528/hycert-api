@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS hycert_agent_registrations (
     ip_addresses    JSONB DEFAULT '[]',
     os              VARCHAR(50) DEFAULT '',
     version         VARCHAR(50) DEFAULT '',
+    poll_interval   INT DEFAULT 3600,
     status          VARCHAR(20) DEFAULT 'active',
     last_seen_at    TIMESTAMPTZ,
     created_at      TIMESTAMPTZ DEFAULT NOW(),

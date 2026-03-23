@@ -136,6 +136,7 @@ func (r *Repository) UpsertRegistration(db *gorm.DB, reg *AgentRegistration) err
 		"ip_addresses":   reg.IPAddresses,
 		"os":             reg.OS,
 		"version":        reg.Version,
+		"poll_interval":  reg.PollInterval,
 		"agent_token_id": reg.AgentTokenID,
 		"last_seen_at":   reg.LastSeenAt,
 		"status":         "active",

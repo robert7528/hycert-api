@@ -303,6 +303,7 @@ func (s *Service) RegisterAgent(tenantDB *gorm.DB, tokenID uint, req *RegisterAg
 		IPAddresses:  ipJSON,
 		OS:           req.OS,
 		Version:      req.Version,
+		PollInterval: req.Interval,
 		Status:       "active",
 		LastSeenAt:   &now,
 	}
