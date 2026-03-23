@@ -116,3 +116,67 @@ func (r *Repository) FindHistoryByDeployment(db *gorm.DB, deploymentID uint, q *
 	}
 	return history, total, nil
 }
+
+// ── Agent Registration (tenant DB) ──────────────────────────────────────────
+
+// UpsertRegistration creates or updates an agent registration.
+func (r *Repository) UpsertRegistration(db *gorm.DB, reg *AgentRegistration) error {
+	var existing AgentRegistration
+	err := db.Where("agent_id = ?", reg.AgentID).First(&existing).Error
+	if err == gorm.ErrRecordNotFound {
+		return db.Create(reg).Error
+	}
+	if err != nil {
+		return err
+	}
+	// Update metadata
+	return db.Model(&existing).Updates(map[string]interface{}{
+		"name":           reg.Name,
+		"hostname":       reg.Hostname,
+		"ip_addresses":   reg.IPAddresses,
+		"os":             reg.OS,
+		"version":        reg.Version,
+		"agent_token_id": reg.AgentTokenID,
+		"last_seen_at":   reg.LastSeenAt,
+		"status":         "active",
+	}).Error
+}
+
+// FindRegistrationByAgentID retrieves a registration by agent UUID.
+func (r *Repository) FindRegistrationByAgentID(db *gorm.DB, agentID string) (*AgentRegistration, error) {
+	var reg AgentRegistration
+	err := db.Where("agent_id = ? AND deleted_at IS NULL", agentID).First(&reg).Error
+	if err != nil {
+		return nil, err
+	}
+	return &reg, nil
+}
+
+// FindAllRegistrations retrieves registrations with pagination.
+func (r *Repository) FindAllRegistrations(db *gorm.DB, q *AgentRegistrationListQuery) ([]AgentRegistration, int64, error) {
+	tx := db.Model(&AgentRegistration{})
+	if q.Status != "" {
+		tx = tx.Where("status = ?", q.Status)
+	}
+
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	page := q.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := q.PageSize
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	tx = tx.Order("last_seen_at DESC NULLS LAST").Offset((page - 1) * pageSize).Limit(pageSize)
+
+	var regs []AgentRegistration
+	if err := tx.Find(&regs).Error; err != nil {
+		return nil, 0, err
+	}
+	return regs, total, nil
+}

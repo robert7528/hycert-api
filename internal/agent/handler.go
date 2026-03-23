@@ -148,7 +148,10 @@ func (h *Handler) GetDeploymentHistory(c *gin.Context) {
 
 // ── Agent API Endpoints ─────────────────────────────────────────────────────
 
-// AgentGetDeployments handles GET /agent/cert/deployments?host=xxx
+// AgentGetDeployments handles GET /agent/cert/deployments
+// Supports two modes:
+//   - X-Agent-ID header: lookup by agent_id (new)
+//   - ?host= query param: lookup by target_host (legacy)
 func (h *Handler) AgentGetDeployments(c *gin.Context) {
 	db := GetAgentTenantDB(c)
 	if db == nil {
@@ -156,13 +159,23 @@ func (h *Handler) AgentGetDeployments(c *gin.Context) {
 		return
 	}
 
+	agentID := c.GetHeader("X-Agent-ID")
 	host := c.Query("host")
-	if host == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_REQUEST", "message": "host parameter is required"}})
+
+	var deployments []AgentDeploymentDTO
+	var err error
+
+	if agentID != "" {
+		// New mode: lookup by agent_id
+		deployments, err = h.svc.GetDeploymentsByAgentID(db, agentID)
+	} else if host != "" {
+		// Legacy mode: lookup by target_host
+		deployments, err = h.svc.GetDeployments(db, host)
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_REQUEST", "message": "X-Agent-ID header or host query parameter is required"}})
 		return
 	}
 
-	deployments, err := h.svc.GetDeployments(db, host)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": gin.H{"code": "QUERY_FAILED", "message": err.Error()}})
 		return
@@ -252,4 +265,58 @@ func (h *Handler) AgentUpdateDeployStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"message": "deploy status updated"}})
+}
+
+// ── Agent Registration Endpoints ─────────────────────────────────────────────
+
+// AgentRegister handles POST /agent/cert/register
+func (h *Handler) AgentRegister(c *gin.Context) {
+	db := GetAgentTenantDB(c)
+	if db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": gin.H{"code": "DB_UNAVAILABLE", "message": "tenant database unavailable"}})
+		return
+	}
+
+	token := GetAgentToken(c)
+	if token == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": gin.H{"code": "UNAUTHORIZED", "message": "missing agent token"}})
+		return
+	}
+
+	var req RegisterAgentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+
+	dto, err := h.svc.RegisterAgent(db, token.ID, &req)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"success": false, "error": gin.H{"code": "REGISTER_FAILED", "message": err.Error()}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": dto})
+}
+
+// AdminListRegistrations handles GET /adm/cert/agent-registrations
+func (h *Handler) AdminListRegistrations(c *gin.Context) {
+	db := middleware.GetTenantDB(c)
+	if db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": gin.H{"code": "DB_UNAVAILABLE", "message": "tenant database unavailable"}})
+		return
+	}
+
+	var q AgentRegistrationListQuery
+	if err := c.ShouldBindQuery(&q); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+
+	resp, err := h.svc.ListRegistrations(db, &q)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": gin.H{"code": "LIST_FAILED", "message": err.Error()}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": resp})
 }

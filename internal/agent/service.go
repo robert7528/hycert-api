@@ -283,3 +283,120 @@ func (s *Service) GetDeploymentHistory(tenantDB *gorm.DB, deploymentID uint, q *
 		TotalPages: totalPages,
 	}, nil
 }
+
+// ── Agent Registration ────────────────────────────────────────────────────────
+
+// RegisterAgent creates or updates an agent registration (upsert).
+func (s *Service) RegisterAgent(tenantDB *gorm.DB, tokenID uint, req *RegisterAgentRequest) (*AgentRegistrationDTO, error) {
+	ipJSON := "[]"
+	if len(req.IPAddresses) > 0 {
+		b, _ := json.Marshal(req.IPAddresses)
+		ipJSON = string(b)
+	}
+
+	now := time.Now()
+	reg := &AgentRegistration{
+		AgentID:      req.AgentID,
+		AgentTokenID: tokenID,
+		Name:         req.Name,
+		Hostname:     req.Hostname,
+		IPAddresses:  ipJSON,
+		OS:           req.OS,
+		Version:      req.Version,
+		Status:       "active",
+		LastSeenAt:   &now,
+	}
+
+	if err := s.repo.UpsertRegistration(tenantDB, reg); err != nil {
+		return nil, fmt.Errorf("failed to register agent: %w", err)
+	}
+
+	// Re-read to get full record
+	saved, err := s.repo.FindRegistrationByAgentID(tenantDB, req.AgentID)
+	if err != nil {
+		return nil, err
+	}
+	dto := saved.ToDTO()
+	return &dto, nil
+}
+
+// GetDeploymentsByAgentID returns deployments linked to a specific agent UUID.
+func (s *Service) GetDeploymentsByAgentID(tenantDB *gorm.DB, agentID string) ([]AgentDeploymentDTO, error) {
+	type deployRow struct {
+		ID              uint
+		CertificateID   uint
+		TargetHost      string
+		TargetService   string
+		TargetDetail    string
+		Port            *int
+		DeployStatus    string
+		LastFingerprint string
+		CertFingerprint string
+		AgentID         string
+	}
+
+	var rows []deployRow
+	err := tenantDB.Raw(`
+		SELECT d.id, d.certificate_id, d.target_host, d.target_service,
+		       d.target_detail, d.port, d.deploy_status, d.last_fingerprint,
+		       d.agent_id,
+		       c.fingerprint_sha256 AS cert_fingerprint
+		FROM hycert_deployments d
+		JOIN hycert_certificates c ON c.id = d.certificate_id AND c.deleted_at IS NULL
+		WHERE d.agent_id = ? AND d.status = 'active' AND d.deleted_at IS NULL
+	`, agentID).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]AgentDeploymentDTO, 0, len(rows))
+	for _, r := range rows {
+		result = append(result, AgentDeploymentDTO{
+			ID:              r.ID,
+			CertificateID:   r.CertificateID,
+			TargetHost:      r.TargetHost,
+			TargetService:   r.TargetService,
+			TargetDetail:    r.TargetDetail,
+			Port:            r.Port,
+			DeployStatus:    r.DeployStatus,
+			LastFingerprint: r.LastFingerprint,
+			CertFingerprint: r.CertFingerprint,
+			AgentID:         r.AgentID,
+		})
+	}
+	return result, nil
+}
+
+// ListRegistrations returns all registered agents for a tenant.
+func (s *Service) ListRegistrations(tenantDB *gorm.DB, q *AgentRegistrationListQuery) (*AgentRegistrationListResponse, error) {
+	regs, total, err := s.repo.FindAllRegistrations(tenantDB, q)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]AgentRegistrationDTO, 0, len(regs))
+	for _, r := range regs {
+		items = append(items, r.ToDTO())
+	}
+
+	page := q.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := q.PageSize
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	totalPages := int(total) / pageSize
+	if int(total)%pageSize > 0 {
+		totalPages++
+	}
+
+	return &AgentRegistrationListResponse{
+		Items:      items,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
+}

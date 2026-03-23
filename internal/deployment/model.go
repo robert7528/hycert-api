@@ -23,6 +23,7 @@ type Deployment struct {
 	LastDeployedAt  *time.Time     `json:"last_deployed_at,omitempty"`
 	AgentTokenID    *uint          `json:"agent_token_id,omitempty"`
 	DeployStatus    string         `gorm:"default:'pending'" json:"deploy_status"` // pending / deploying / deployed / failed
+	AgentID         *string        `gorm:"type:varchar(36)" json:"agent_id,omitempty"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
@@ -34,8 +35,9 @@ type CreateDeploymentRequest struct {
 	TargetHost    string `json:"target_host" binding:"required"`
 	TargetService string `json:"target_service" binding:"required"`
 	TargetDetail  string `json:"target_detail,omitempty"`
-	Port          *int   `json:"port,omitempty"`
-	Notes         string `json:"notes,omitempty"`
+	Port          *int    `json:"port,omitempty"`
+	Notes         string  `json:"notes,omitempty"`
+	AgentID       *string `json:"agent_id,omitempty"`
 }
 
 // UpdateDeploymentRequest is the payload for updating a deployment record.
@@ -46,6 +48,7 @@ type UpdateDeploymentRequest struct {
 	Port          *int    `json:"port,omitempty"`
 	Status        *string `json:"status,omitempty"`
 	Notes         *string `json:"notes,omitempty"`
+	AgentID       *string `json:"agent_id,omitempty"`
 }
 
 // DeploymentListQuery captures query parameters for listing deployments.

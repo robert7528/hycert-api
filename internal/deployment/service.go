@@ -33,6 +33,7 @@ func (s *Service) Create(db *gorm.DB, req *CreateDeploymentRequest, username str
 		DeployedAt:    &now,
 		DeployedBy:    username,
 		Notes:         req.Notes,
+		AgentID:       req.AgentID,
 	}
 
 	if err := s.repo.Create(db, d); err != nil {
@@ -109,6 +110,9 @@ func (s *Service) Update(db *gorm.DB, id uint, req *UpdateDeploymentRequest) (*D
 	}
 	if req.Notes != nil {
 		d.Notes = *req.Notes
+	}
+	if req.AgentID != nil {
+		d.AgentID = req.AgentID
 	}
 
 	if err := s.repo.Update(db, d); err != nil {

@@ -112,6 +112,7 @@ type AgentDeploymentDTO struct {
 	DeployStatus  string     `json:"deploy_status"`
 	LastFingerprint string  `json:"last_fingerprint"`
 	CertFingerprint string  `json:"cert_fingerprint"` // 目前憑證的 fingerprint（用於比對）
+	AgentID         string  `json:"agent_id,omitempty"`
 }
 
 type UpdateDeployStatusRequest struct {
@@ -133,4 +134,79 @@ type HistoryListResponse struct {
 	Page       int                 `json:"page"`
 	PageSize   int                 `json:"page_size"`
 	TotalPages int                 `json:"total_pages"`
+}
+
+// ── Agent Registration (tenant DB) ───────────────────────────────────────────
+
+func (AgentRegistration) TableName() string { return "hycert_agent_registrations" }
+
+type AgentRegistration struct {
+	ID           uint           `gorm:"primaryKey" json:"id"`
+	AgentID      string         `gorm:"not null;uniqueIndex" json:"agent_id"`
+	AgentTokenID uint           `gorm:"not null" json:"agent_token_id"`
+	Name         string         `gorm:"not null;default:''" json:"name"`
+	Hostname     string         `gorm:"not null;default:''" json:"hostname"`
+	IPAddresses  string         `gorm:"type:jsonb;default:'[]'" json:"ip_addresses"`
+	OS           string         `gorm:"default:''" json:"os"`
+	Version      string         `gorm:"default:''" json:"version"`
+	Status       string         `gorm:"default:'active'" json:"status"`
+	LastSeenAt   *time.Time     `json:"last_seen_at"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+type AgentRegistrationDTO struct {
+	ID           uint       `json:"id"`
+	AgentID      string     `json:"agent_id"`
+	AgentTokenID uint       `json:"agent_token_id"`
+	Name         string     `json:"name"`
+	Hostname     string     `json:"hostname"`
+	IPAddresses  string     `json:"ip_addresses"`
+	OS           string     `json:"os"`
+	Version      string     `json:"version"`
+	Status       string     `json:"status"`
+	LastSeenAt   *time.Time `json:"last_seen_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+func (r *AgentRegistration) ToDTO() AgentRegistrationDTO {
+	return AgentRegistrationDTO{
+		ID:           r.ID,
+		AgentID:      r.AgentID,
+		AgentTokenID: r.AgentTokenID,
+		Name:         r.Name,
+		Hostname:     r.Hostname,
+		IPAddresses:  r.IPAddresses,
+		OS:           r.OS,
+		Version:      r.Version,
+		Status:       r.Status,
+		LastSeenAt:   r.LastSeenAt,
+		CreatedAt:    r.CreatedAt,
+		UpdatedAt:    r.UpdatedAt,
+	}
+}
+
+type RegisterAgentRequest struct {
+	AgentID     string   `json:"agent_id" binding:"required"`
+	Name        string   `json:"name"`
+	Hostname    string   `json:"hostname"`
+	IPAddresses []string `json:"ip_addresses,omitempty"`
+	OS          string   `json:"os,omitempty"`
+	Version     string   `json:"version,omitempty"`
+}
+
+type AgentRegistrationListQuery struct {
+	Page     int    `form:"page,default=1"`
+	PageSize int    `form:"page_size,default=20"`
+	Status   string `form:"status"`
+}
+
+type AgentRegistrationListResponse struct {
+	Items      []AgentRegistrationDTO `json:"items"`
+	Total      int64                  `json:"total"`
+	Page       int                    `json:"page"`
+	PageSize   int                    `json:"page_size"`
+	TotalPages int                    `json:"total_pages"`
 }

@@ -96,6 +96,7 @@ func RegisterRoutes(p RouteParams) {
 	}
 
 	// CRUD (tenant DB + audit middleware)
+	// Note: agent-registrations route group is added after crud is defined (below)
 	{
 		crud := adm.Group("")
 		crud.Use(middleware.TenantMiddleware())
@@ -154,12 +155,17 @@ func RegisterRoutes(p RouteParams) {
 			acmeOrders.POST("/:id/renew", p.AcmeHandler.RenewOrder)
 			acmeOrders.DELETE("/:id", p.AcmeHandler.CancelOrder)
 		}
+		agentRegs := crud.Group("/agent-registrations")
+		{
+			agentRegs.GET("", p.AgentHandler.AdminListRegistrations)
+		}
 	}
 
 	// ── Agent routes (Agent Token auth) ─────────────────────────────────
 	agentGroup := api.Group("/agent/cert")
 	agentGroup.Use(agent.AgentAuthMiddleware(p.AgentSvc, p.DB, p.DBManager, p.Server.log))
 	{
+		agentGroup.POST("/register", p.AgentHandler.AgentRegister)
 		agentGroup.GET("/deployments", p.AgentHandler.AgentGetDeployments)
 		agentGroup.GET("/certificates/:id/download", p.AgentHandler.AgentDownloadCert)
 		agentGroup.PUT("/deployments/:id/status", p.AgentHandler.AgentUpdateDeployStatus)

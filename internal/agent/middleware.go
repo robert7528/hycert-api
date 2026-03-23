@@ -58,9 +58,10 @@ func AgentAuthMiddleware(svc *Service, adminDB *gorm.DB, dbMgr *database.DBManag
 			return
 		}
 
-		// Check allowed_hosts restriction
+		// Check allowed_hosts restriction (only for legacy host-based mode)
+		agentID := c.GetHeader("X-Agent-ID")
 		host := c.Query("host")
-		if host != "" && token.AllowedHosts != "" && token.AllowedHosts != "[]" {
+		if agentID == "" && host != "" && token.AllowedHosts != "" && token.AllowedHosts != "[]" {
 			var allowed []string
 			if err := json.Unmarshal([]byte(token.AllowedHosts), &allowed); err == nil && len(allowed) > 0 {
 				found := false
