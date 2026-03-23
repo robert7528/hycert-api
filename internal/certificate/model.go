@@ -122,6 +122,7 @@ type ListQuery struct {
 type DownloadQuery struct {
 	Format       string `form:"format,default=pem"` // pem | key | pfx | jks | der
 	Password     string `form:"password"`           // required for pfx/jks
+	Alias        string `form:"alias"`              // JKS key alias (default: "1")
 	IncludeChain *bool  `form:"include_chain"`
 	IncludeKey   bool   `form:"include_key"`        // for pem: merge private key into PEM (HAProxy)
 }

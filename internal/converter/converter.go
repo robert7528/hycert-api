@@ -32,6 +32,7 @@ type ConvertRequest struct {
 	InputType     string // auto | pem | der_base64 | pfx_base64
 	InputPassword string // password for input PFX (separate from output password)
 	Password      string // for PFX/JKS output
+	Alias         string // JKS key alias (default: "1")
 	// Parsed intermediates to include
 	Intermediates []*x509.Certificate
 	TargetFormat  string
@@ -101,7 +102,11 @@ func (c *Converter) Convert(req *ConvertRequest) (*ConvertResult, error) {
 	case FormatPFX:
 		return c.toPFX(leaf, chainCerts, privKey, req.Password, req.FriendlyName)
 	case FormatJKS:
-		return c.toJKS(leaf, chainCerts, privKey, req.Password)
+		alias := req.Alias
+		if alias == "" {
+			alias = "1"
+		}
+		return c.toJKS(leaf, chainCerts, privKey, req.Password, alias)
 	case FormatP7B:
 		return c.toP7B(leaf, chainCerts)
 	default:
@@ -170,7 +175,7 @@ func (c *Converter) toPFX(leaf *x509.Certificate, chain []*x509.Certificate, pri
 	}, nil
 }
 
-func (c *Converter) toJKS(leaf *x509.Certificate, chain []*x509.Certificate, privKey interface{}, password string) (*ConvertResult, error) {
+func (c *Converter) toJKS(leaf *x509.Certificate, chain []*x509.Certificate, privKey interface{}, password, alias string) (*ConvertResult, error) {
 	if privKey == nil {
 		return nil, fmt.Errorf("private key is required for JKS conversion")
 	}
@@ -205,7 +210,7 @@ func (c *Converter) toJKS(leaf *x509.Certificate, chain []*x509.Certificate, pri
 		CertificateChain: certChain,
 	}
 
-	if err := ks.SetPrivateKeyEntry("1", pke, []byte(password)); err != nil {
+	if err := ks.SetPrivateKeyEntry(alias, pke, []byte(password)); err != nil {
 		return nil, fmt.Errorf("failed to set JKS private key entry: %w", err)
 	}
 

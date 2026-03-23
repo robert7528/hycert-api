@@ -436,6 +436,7 @@ func (s *Service) Download(db *gorm.DB, id uint, q *DownloadQuery) (*converter.C
 		PrivateKey:   privKeyPEM,
 		InputType:    "pem",
 		Password:     q.Password,
+		Alias:        q.Alias,
 		TargetFormat: format,
 		IncludeChain: includeChain,
 		FriendlyName: cert.Name,
