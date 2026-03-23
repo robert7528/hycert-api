@@ -35,7 +35,7 @@ func (r *Repository) FindAll(db *gorm.DB, q *CSRListQuery) ([]CSR, int64, error)
 	}
 	if q.Search != "" {
 		like := "%" + q.Search + "%"
-		tx = tx.Where("common_name ILIKE ? OR sans ILIKE ?", like, like)
+		tx = tx.Where("common_name ILIKE ? OR sans::text ILIKE ?", like, like)
 	}
 
 	var total int64
