@@ -56,8 +56,9 @@ type DeploymentListQuery struct {
 	Page          int    `form:"page,default=1"`
 	PageSize      int    `form:"page_size,default=20"`
 	CertificateID uint   `form:"certificate_id"`
-	Search        string `form:"search"` // target_host or target_service substring
-	Status        string `form:"status"` // active | removed
+	Search        string `form:"search"`        // target_host or target_service substring
+	Status        string `form:"status"`        // active | removed
+	DeployStatus  string `form:"deploy_status"` // pending | deployed | failed
 }
 
 // DeploymentListResponse wraps a paginated list of deployments.

@@ -33,6 +33,10 @@ func (r *Repository) FindAll(db *gorm.DB, q *CSRListQuery) ([]CSR, int64, error)
 	if q.Status != "" {
 		tx = tx.Where("status = ?", q.Status)
 	}
+	if q.Search != "" {
+		like := "%" + q.Search + "%"
+		tx = tx.Where("common_name ILIKE ? OR sans ILIKE ?", like, like)
+	}
 
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {

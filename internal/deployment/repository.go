@@ -40,6 +40,9 @@ func (r *Repository) FindAll(db *gorm.DB, q *DeploymentListQuery) ([]Deployment,
 	if q.Status != "" {
 		tx = tx.Where("status = ?", q.Status)
 	}
+	if q.DeployStatus != "" {
+		tx = tx.Where("deploy_status = ?", q.DeployStatus)
+	}
 
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
