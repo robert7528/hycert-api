@@ -41,6 +41,8 @@ type AgentTokenDTO struct {
 	Status       string     `json:"status"`
 	CreatedBy    string     `json:"created_by"`
 	CreatedAt    time.Time  `json:"created_at"`
+	AgentCount   int64      `json:"agent_count"`
+	CanReveal    bool       `json:"can_reveal"`
 }
 
 func (t *AgentToken) ToDTO() AgentTokenDTO {
@@ -56,6 +58,7 @@ func (t *AgentToken) ToDTO() AgentTokenDTO {
 		Status:       t.Status,
 		CreatedBy:    t.CreatedBy,
 		CreatedAt:    t.CreatedAt,
+		CanReveal:    t.TokenEncrypted != "",
 	}
 }
 
@@ -171,6 +174,7 @@ type AgentRegistrationDTO struct {
 	ID           uint       `json:"id"`
 	AgentID      string     `json:"agent_id"`
 	AgentTokenID uint       `json:"agent_token_id"`
+	TokenName    string     `json:"token_name"`
 	Name         string     `json:"name"`
 	Hostname     string     `json:"hostname"`
 	IPAddresses  string     `json:"ip_addresses"`

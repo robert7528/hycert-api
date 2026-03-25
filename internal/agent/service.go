@@ -90,8 +90,8 @@ func (s *Service) CreateToken(adminDB *gorm.DB, req *CreateTokenRequest, tenantC
 	}, nil
 }
 
-// ListTokens returns tokens for a tenant.
-func (s *Service) ListTokens(adminDB *gorm.DB, tenantCode string, q *TokenListQuery) (*TokenListResponse, error) {
+// ListTokens returns tokens for a tenant with agent counts.
+func (s *Service) ListTokens(adminDB *gorm.DB, tenantDB *gorm.DB, tenantCode string, q *TokenListQuery) (*TokenListResponse, error) {
 	tokens, total, err := s.repo.FindAllTokens(adminDB, tenantCode, q)
 	if err != nil {
 		return nil, err
@@ -99,7 +99,12 @@ func (s *Service) ListTokens(adminDB *gorm.DB, tenantCode string, q *TokenListQu
 
 	items := make([]AgentTokenDTO, 0, len(tokens))
 	for _, t := range tokens {
-		items = append(items, t.ToDTO())
+		dto := t.ToDTO()
+		if tenantDB != nil {
+			count, _ := s.repo.CountAgentsByTokenID(tenantDB, t.ID)
+			dto.AgentCount = count
+		}
+		items = append(items, dto)
 	}
 
 	page := q.Page
@@ -142,6 +147,41 @@ func (s *Service) RevokeToken(adminDB *gorm.DB, id uint, tenantCode string) erro
 	}
 	token.Status = "revoked"
 	return s.repo.UpdateToken(adminDB, token)
+}
+
+// DeleteToken hard-deletes a token if no agents are bound to it.
+func (s *Service) DeleteToken(adminDB *gorm.DB, tenantDB *gorm.DB, id uint, tenantCode string) error {
+	token, err := s.repo.FindTokenByID(adminDB, id, tenantCode)
+	if err != nil {
+		return fmt.Errorf("token not found")
+	}
+
+	// Check if any agents are bound (regardless of status)
+	count, err := s.repo.CountAgentsByTokenID(tenantDB, token.ID)
+	if err != nil {
+		return fmt.Errorf("failed to check agent bindings: %w", err)
+	}
+	if count > 0 {
+		return fmt.Errorf("cannot delete: %d agent(s) still bound to this token", count)
+	}
+
+	return s.repo.HardDeleteToken(adminDB, id)
+}
+
+// RevealToken decrypts and returns the raw token.
+func (s *Service) RevealToken(adminDB *gorm.DB, id uint, tenantCode string) (string, error) {
+	token, err := s.repo.FindTokenByID(adminDB, id, tenantCode)
+	if err != nil {
+		return "", fmt.Errorf("token not found")
+	}
+	if token.TokenEncrypted == "" {
+		return "", fmt.Errorf("token was created before encrypted storage, cannot reveal")
+	}
+	rawToken, err := s.enc.Decrypt(token.TokenEncrypted)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt token: %w", err)
+	}
+	return rawToken, nil
 }
 
 // UpdateToken updates name and/or label of a token.
@@ -411,16 +451,28 @@ func (s *Service) UpdateRegistrationStatus(tenantDB *gorm.DB, id uint, status st
 	return tenantDB.Model(&reg).Update("status", status).Error
 }
 
-// ListRegistrations returns all registered agents for a tenant.
-func (s *Service) ListRegistrations(tenantDB *gorm.DB, q *AgentRegistrationListQuery) (*AgentRegistrationListResponse, error) {
+// ListRegistrations returns all registered agents for a tenant with token names.
+func (s *Service) ListRegistrations(tenantDB *gorm.DB, adminDB *gorm.DB, q *AgentRegistrationListQuery) (*AgentRegistrationListResponse, error) {
 	regs, total, err := s.repo.FindAllRegistrations(tenantDB, q)
 	if err != nil {
 		return nil, err
 	}
 
+	// Build token name map
+	tokenNames := make(map[uint]string)
+	if adminDB != nil {
+		var tokens []AgentToken
+		adminDB.Select("id, name").Find(&tokens)
+		for _, t := range tokens {
+			tokenNames[t.ID] = t.Name
+		}
+	}
+
 	items := make([]AgentRegistrationDTO, 0, len(regs))
 	for _, r := range regs {
-		items = append(items, r.ToDTO())
+		dto := r.ToDTO()
+		dto.TokenName = tokenNames[r.AgentTokenID]
+		items = append(items, dto)
 	}
 
 	page := q.Page

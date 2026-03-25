@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hysp/hycert-api/internal/certificate"
+	"github.com/robert7528/hycore/database"
 	"github.com/robert7528/hycore/middleware"
 	"gorm.io/gorm"
 )
@@ -15,11 +16,25 @@ type Handler struct {
 	svc     *Service
 	certSvc *certificate.Service
 	adminDB *gorm.DB
+	dbMgr   *database.DBManager
 }
 
 // NewHandler creates a new agent Handler.
-func NewHandler(svc *Service, certSvc *certificate.Service, adminDB *gorm.DB) *Handler {
-	return &Handler{svc: svc, certSvc: certSvc, adminDB: adminDB}
+func NewHandler(svc *Service, certSvc *certificate.Service, adminDB *gorm.DB, dbMgr *database.DBManager) *Handler {
+	return &Handler{svc: svc, certSvc: certSvc, adminDB: adminDB, dbMgr: dbMgr}
+}
+
+// resolveTenantDB tries to get tenant DB from claims.
+func (h *Handler) resolveTenantDB(c *gin.Context) *gorm.DB {
+	claims := middleware.GetClaims(c)
+	if claims == nil || h.dbMgr == nil {
+		return nil
+	}
+	db, err := h.dbMgr.GetDB(claims.TenantCode)
+	if err != nil {
+		return nil
+	}
+	return db
 }
 
 // ── Admin Token Management Endpoints ────────────────────────────────────────
@@ -61,7 +76,8 @@ func (h *Handler) ListTokens(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.ListTokens(h.adminDB, claims.TenantCode, &q)
+	tenantDB := h.resolveTenantDB(c)
+	resp, err := h.svc.ListTokens(h.adminDB, tenantDB, claims.TenantCode, &q)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": gin.H{"code": "LIST_FAILED", "message": err.Error()}})
 		return
@@ -113,6 +129,52 @@ func (h *Handler) RevokeToken(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"message": "token revoked"}})
+}
+
+// DeleteToken handles DELETE /adm/cert/agent-tokens/:id (hard delete)
+func (h *Handler) DeleteToken(c *gin.Context) {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": gin.H{"code": "UNAUTHORIZED", "message": "missing claims"}})
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_ID", "message": "invalid token ID"}})
+		return
+	}
+
+	tenantDB := h.resolveTenantDB(c)
+	if err := h.svc.DeleteToken(h.adminDB, tenantDB, uint(id), claims.TenantCode); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"success": false, "error": gin.H{"code": "DELETE_FAILED", "message": err.Error()}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"message": "token deleted"}})
+}
+
+// RevealToken handles GET /adm/cert/agent-tokens/:id/reveal
+func (h *Handler) RevealToken(c *gin.Context) {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": gin.H{"code": "UNAUTHORIZED", "message": "missing claims"}})
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_ID", "message": "invalid token ID"}})
+		return
+	}
+
+	rawToken, err := h.svc.RevealToken(h.adminDB, uint(id), claims.TenantCode)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"success": false, "error": gin.H{"code": "REVEAL_FAILED", "message": err.Error()}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"token": rawToken}})
 }
 
 // UpdateToken handles PUT /adm/cert/agent-tokens/:id
@@ -405,7 +467,7 @@ func (h *Handler) AdminListRegistrations(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.ListRegistrations(db, &q)
+	resp, err := h.svc.ListRegistrations(db, h.adminDB, &q)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": gin.H{"code": "LIST_FAILED", "message": err.Error()}})
 		return

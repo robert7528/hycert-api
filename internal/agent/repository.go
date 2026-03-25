@@ -84,6 +84,18 @@ func (r *Repository) UpdateLastUsed(db *gorm.DB, id uint) error {
 	return db.Model(&AgentToken{}).Where("id = ?", id).Update("last_used_at", gorm.Expr("NOW()")).Error
 }
 
+// HardDeleteToken permanently removes a token from the database.
+func (r *Repository) HardDeleteToken(db *gorm.DB, id uint) error {
+	return db.Unscoped().Delete(&AgentToken{}, id).Error
+}
+
+// CountAgentsByTokenID counts agents bound to a specific token (regardless of status).
+func (r *Repository) CountAgentsByTokenID(db *gorm.DB, tokenID uint) (int64, error) {
+	var count int64
+	err := db.Model(&AgentRegistration{}).Where("agent_token_id = ? AND deleted_at IS NULL", tokenID).Count(&count).Error
+	return count, err
+}
+
 // FindActiveTokenByLabel retrieves an active token by label for a tenant.
 func (r *Repository) FindActiveTokenByLabel(db *gorm.DB, tenantCode, label string) (*AgentToken, error) {
 	var token AgentToken

@@ -93,8 +93,10 @@ func RegisterRoutes(p RouteParams) {
 			tokens.GET("/labels", p.AgentHandler.ListLabels)
 			tokens.GET("/by-label/:label", p.AgentHandler.GetTokenByLabel)
 			tokens.GET("/:id", p.AgentHandler.GetToken)
+			tokens.GET("/:id/reveal", p.AgentHandler.RevealToken)
 			tokens.PUT("/:id", p.AgentHandler.UpdateToken)
-			tokens.DELETE("/:id", p.AgentHandler.RevokeToken)
+			tokens.PUT("/:id/revoke", p.AgentHandler.RevokeToken)
+			tokens.DELETE("/:id", p.AgentHandler.DeleteToken)
 		}
 	}
 
