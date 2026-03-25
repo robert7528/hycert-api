@@ -165,8 +165,11 @@ func (h *Handler) AgentGetDeployments(c *gin.Context) {
 	}
 
 	deployments, err := h.svc.GetDeploymentsByAgentID(db, agentID)
-
 	if err != nil {
+		if err.Error() == "agent is disabled" {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": gin.H{"code": "AGENT_DISABLED", "message": err.Error()}})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": gin.H{"code": "QUERY_FAILED", "message": err.Error()}})
 		return
 	}
