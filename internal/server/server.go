@@ -90,7 +90,10 @@ func RegisterRoutes(p RouteParams) {
 		{
 			tokens.POST("", p.AgentHandler.CreateToken)
 			tokens.GET("", p.AgentHandler.ListTokens)
+			tokens.GET("/labels", p.AgentHandler.ListLabels)
+			tokens.GET("/by-label/:label", p.AgentHandler.GetTokenByLabel)
 			tokens.GET("/:id", p.AgentHandler.GetToken)
+			tokens.PUT("/:id", p.AgentHandler.UpdateToken)
 			tokens.DELETE("/:id", p.AgentHandler.RevokeToken)
 		}
 	}

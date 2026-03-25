@@ -115,6 +115,70 @@ func (h *Handler) RevokeToken(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"message": "token revoked"}})
 }
 
+// UpdateToken handles PUT /adm/cert/agent-tokens/:id
+func (h *Handler) UpdateToken(c *gin.Context) {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": gin.H{"code": "UNAUTHORIZED", "message": "missing claims"}})
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_ID", "message": "invalid token ID"}})
+		return
+	}
+
+	var req UpdateTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+
+	dto, err := h.svc.UpdateToken(h.adminDB, uint(id), claims.TenantCode, &req)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"success": false, "error": gin.H{"code": "UPDATE_FAILED", "message": err.Error()}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": dto})
+}
+
+// GetTokenByLabel handles GET /adm/cert/agent-tokens/by-label/:label
+func (h *Handler) GetTokenByLabel(c *gin.Context) {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": gin.H{"code": "UNAUTHORIZED", "message": "missing claims"}})
+		return
+	}
+
+	label := c.Param("label")
+	resp, err := h.svc.GetTokenByLabel(h.adminDB, claims.TenantCode, label)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": gin.H{"code": "NOT_FOUND", "message": err.Error()}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": resp})
+}
+
+// ListLabels handles GET /adm/cert/agent-tokens/labels
+func (h *Handler) ListLabels(c *gin.Context) {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": gin.H{"code": "UNAUTHORIZED", "message": "missing claims"}})
+		return
+	}
+
+	labels, err := h.svc.ListLabels(h.adminDB, claims.TenantCode)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": gin.H{"code": "LIST_FAILED", "message": err.Error()}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": labels})
+}
+
 // ── Admin Deployment History Endpoint ───────────────────────────────────────
 
 // GetDeploymentHistory handles GET /adm/cert/deployments/:id/history
@@ -164,7 +228,13 @@ func (h *Handler) AgentGetDeployments(c *gin.Context) {
 		return
 	}
 
-	deployments, err := h.svc.GetDeploymentsByAgentID(db, agentID)
+	// Get token label for deployment filtering
+	tokenLabel := ""
+	if token := GetAgentToken(c); token != nil {
+		tokenLabel = token.Label
+	}
+
+	deployments, err := h.svc.GetDeploymentsByAgentID(db, agentID, tokenLabel)
 	if err != nil {
 		if err.Error() == "agent is disabled" {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": gin.H{"code": "AGENT_DISABLED", "message": err.Error()}})

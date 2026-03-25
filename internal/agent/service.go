@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/robert7528/hycore/crypto"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -15,12 +16,13 @@ import (
 // Service handles agent token management and deployment operations.
 type Service struct {
 	repo *Repository
+	enc  crypto.Encryptor
 	log  *zap.Logger
 }
 
 // NewService creates a new agent Service.
-func NewService(repo *Repository, log *zap.Logger) *Service {
-	return &Service{repo: repo, log: log}
+func NewService(repo *Repository, enc crypto.Encryptor, log *zap.Logger) *Service {
+	return &Service{repo: repo, enc: enc, log: log}
 }
 
 // ── Token Management ────────────────────────────────────────────────────────
@@ -59,15 +61,23 @@ func (s *Service) CreateToken(adminDB *gorm.DB, req *CreateTokenRequest, tenantC
 		expiresAt = &t
 	}
 
+	// Tink-encrypt the raw token for later retrieval
+	tokenEncrypted, err := s.enc.Encrypt(rawToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt token: %w", err)
+	}
+
 	token := &AgentToken{
-		Name:         req.Name,
-		TokenHash:    tokenHash,
-		TokenPrefix:  prefix,
-		TenantCode:   tenantCode,
-		AllowedHosts: allowedHosts,
-		ExpiresAt:    expiresAt,
-		Status:       "active",
-		CreatedBy:    username,
+		Name:           req.Name,
+		TokenHash:      tokenHash,
+		TokenPrefix:    prefix,
+		TokenEncrypted: tokenEncrypted,
+		Label:          req.Label,
+		TenantCode:     tenantCode,
+		AllowedHosts:   allowedHosts,
+		ExpiresAt:      expiresAt,
+		Status:         "active",
+		CreatedBy:      username,
 	}
 
 	if err := s.repo.CreateToken(adminDB, token); err != nil {
@@ -132,6 +142,49 @@ func (s *Service) RevokeToken(adminDB *gorm.DB, id uint, tenantCode string) erro
 	}
 	token.Status = "revoked"
 	return s.repo.UpdateToken(adminDB, token)
+}
+
+// UpdateToken updates name and/or label of a token.
+func (s *Service) UpdateToken(adminDB *gorm.DB, id uint, tenantCode string, req *UpdateTokenRequest) (*AgentTokenDTO, error) {
+	token, err := s.repo.FindTokenByID(adminDB, id, tenantCode)
+	if err != nil {
+		return nil, fmt.Errorf("token not found")
+	}
+	if req.Name != nil {
+		token.Name = *req.Name
+	}
+	if req.Label != nil {
+		token.Label = *req.Label
+	}
+	if err := s.repo.UpdateToken(adminDB, token); err != nil {
+		return nil, err
+	}
+	dto := token.ToDTO()
+	return &dto, nil
+}
+
+// GetTokenByLabel finds an active token by label and decrypts it for reuse.
+func (s *Service) GetTokenByLabel(adminDB *gorm.DB, tenantCode, label string) (*CreateTokenResponse, error) {
+	if label == "" {
+		return nil, fmt.Errorf("label is required")
+	}
+	token, err := s.repo.FindActiveTokenByLabel(adminDB, tenantCode, label)
+	if err != nil {
+		return nil, fmt.Errorf("no active token found for label %q", label)
+	}
+	rawToken, err := s.enc.Decrypt(token.TokenEncrypted)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt token: %w", err)
+	}
+	return &CreateTokenResponse{
+		Token:         rawToken,
+		AgentTokenDTO: token.ToDTO(),
+	}, nil
+}
+
+// ListLabels returns distinct labels from active tokens for a tenant.
+func (s *Service) ListLabels(adminDB *gorm.DB, tenantCode string) ([]string, error) {
+	return s.repo.FindDistinctLabels(adminDB, tenantCode)
 }
 
 // ── Agent Authentication ────────────────────────────────────────────────────
@@ -279,7 +332,7 @@ func (s *Service) RegisterAgent(tenantDB *gorm.DB, tokenID uint, req *RegisterAg
 
 // GetDeploymentsByAgentID returns deployments linked to a specific agent UUID.
 // Returns an error if the agent is disabled.
-func (s *Service) GetDeploymentsByAgentID(tenantDB *gorm.DB, agentID string) ([]AgentDeploymentDTO, error) {
+func (s *Service) GetDeploymentsByAgentID(tenantDB *gorm.DB, agentID string, tokenLabel string) ([]AgentDeploymentDTO, error) {
 	// Check agent status
 	reg, err := s.repo.FindRegistrationByAgentID(tenantDB, agentID)
 	if err == nil && reg.Status == "disabled" {
@@ -302,8 +355,11 @@ func (s *Service) GetDeploymentsByAgentID(tenantDB *gorm.DB, agentID string) ([]
 		AgentID         string
 	}
 
+	// Label matching (寬鬆模式):
+	// - token 無 label → 回傳所有 deployments
+	// - token 有 label → 回傳 label 相同 OR label 為空的 deployments
 	var rows []deployRow
-	err = tenantDB.Raw(`
+	query := `
 		SELECT d.id, d.certificate_id, d.target_host, d.target_service,
 		       d.target_detail, d.port, d.deploy_status, d.last_fingerprint,
 		       d.agent_id,
@@ -311,7 +367,16 @@ func (s *Service) GetDeploymentsByAgentID(tenantDB *gorm.DB, agentID string) ([]
 		FROM hycert_deployments d
 		JOIN hycert_certificates c ON c.id = d.certificate_id AND c.deleted_at IS NULL
 		WHERE d.agent_id = ? AND d.status = 'active' AND d.deleted_at IS NULL
-	`, agentID).Scan(&rows).Error
+	`
+	var args []interface{}
+	args = append(args, agentID)
+
+	if tokenLabel != "" {
+		query += ` AND (d.label = ? OR d.label = '')`
+		args = append(args, tokenLabel)
+	}
+
+	err = tenantDB.Raw(query, args...).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}

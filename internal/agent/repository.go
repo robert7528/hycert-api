@@ -84,6 +84,30 @@ func (r *Repository) UpdateLastUsed(db *gorm.DB, id uint) error {
 	return db.Model(&AgentToken{}).Where("id = ?", id).Update("last_used_at", gorm.Expr("NOW()")).Error
 }
 
+// FindActiveTokenByLabel retrieves an active token by label for a tenant.
+func (r *Repository) FindActiveTokenByLabel(db *gorm.DB, tenantCode, label string) (*AgentToken, error) {
+	var token AgentToken
+	err := db.Where("tenant_code = ? AND label = ? AND status = ?", tenantCode, label, "active").
+		Order("created_at DESC").First(&token).Error
+	if err != nil {
+		return nil, err
+	}
+	return &token, nil
+}
+
+// FindDistinctLabels returns unique non-empty labels from active tokens for a tenant.
+func (r *Repository) FindDistinctLabels(db *gorm.DB, tenantCode string) ([]string, error) {
+	var labels []string
+	err := db.Model(&AgentToken{}).
+		Where("tenant_code = ? AND status = ? AND label != ''", tenantCode, "active").
+		Distinct("label").
+		Pluck("label", &labels).Error
+	if err != nil {
+		return nil, err
+	}
+	return labels, nil
+}
+
 // ── Deployment History (tenant DB) ──────────────────────────────────────────
 
 // CreateHistory inserts a deployment history record.

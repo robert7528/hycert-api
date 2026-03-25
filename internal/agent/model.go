@@ -11,19 +11,21 @@ import (
 func (AgentToken) TableName() string { return "hycert_agent_tokens" }
 
 type AgentToken struct {
-	ID          uint           `gorm:"primaryKey" json:"id"`
-	Name        string         `gorm:"not null" json:"name"`
-	TokenHash   string         `gorm:"not null;uniqueIndex" json:"-"`
-	TokenPrefix string         `gorm:"not null" json:"token_prefix"` // 前 8 碼
-	TenantCode  string         `gorm:"not null" json:"tenant_code"`
-	AllowedHosts string        `gorm:"column:allowed_hosts;type:jsonb;default:'[]'" json:"allowed_hosts"`
-	LastUsedAt  *time.Time     `json:"last_used_at"`
-	ExpiresAt   *time.Time     `json:"expires_at"`
-	Status      string         `gorm:"default:'active'" json:"status"` // active / revoked
-	CreatedBy   string         `json:"created_by"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID             uint           `gorm:"primaryKey" json:"id"`
+	Name           string         `gorm:"not null" json:"name"`
+	TokenHash      string         `gorm:"not null;uniqueIndex" json:"-"`
+	TokenPrefix    string         `gorm:"not null" json:"token_prefix"` // 前 8 碼
+	TokenEncrypted string         `gorm:"not null;default:''" json:"-"` // Tink 加密明文
+	Label          string         `gorm:"not null;default:''" json:"label"`
+	TenantCode     string         `gorm:"not null" json:"tenant_code"`
+	AllowedHosts   string         `gorm:"column:allowed_hosts;type:jsonb;default:'[]'" json:"allowed_hosts"`
+	LastUsedAt     *time.Time     `json:"last_used_at"`
+	ExpiresAt      *time.Time     `json:"expires_at"`
+	Status         string         `gorm:"default:'active'" json:"status"` // active / revoked
+	CreatedBy      string         `json:"created_by"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // AgentTokenDTO is the API response (no hash).
@@ -31,6 +33,7 @@ type AgentTokenDTO struct {
 	ID           uint       `json:"id"`
 	Name         string     `json:"name"`
 	TokenPrefix  string     `json:"token_prefix"`
+	Label        string     `json:"label"`
 	TenantCode   string     `json:"tenant_code"`
 	AllowedHosts string     `json:"allowed_hosts"`
 	LastUsedAt   *time.Time `json:"last_used_at"`
@@ -45,6 +48,7 @@ func (t *AgentToken) ToDTO() AgentTokenDTO {
 		ID:           t.ID,
 		Name:         t.Name,
 		TokenPrefix:  t.TokenPrefix,
+		Label:        t.Label,
 		TenantCode:   t.TenantCode,
 		AllowedHosts: t.AllowedHosts,
 		LastUsedAt:   t.LastUsedAt,
@@ -77,8 +81,14 @@ type DeploymentHistory struct {
 
 type CreateTokenRequest struct {
 	Name         string   `json:"name" binding:"required"`
+	Label        string   `json:"label,omitempty"`
 	AllowedHosts []string `json:"allowed_hosts,omitempty"`
 	ExpiresAt    *string  `json:"expires_at,omitempty"` // RFC3339
+}
+
+type UpdateTokenRequest struct {
+	Name  *string `json:"name,omitempty"`
+	Label *string `json:"label,omitempty"`
 }
 
 type CreateTokenResponse struct {
