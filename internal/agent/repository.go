@@ -129,8 +129,8 @@ func (r *Repository) UpsertRegistration(db *gorm.DB, reg *AgentRegistration) err
 	if err != nil {
 		return err
 	}
-	// Update metadata
-	return db.Model(&existing).Updates(map[string]interface{}{
+	// Update metadata (preserve existing status — don't override disabled)
+	updates := map[string]interface{}{
 		"name":           reg.Name,
 		"hostname":       reg.Hostname,
 		"ip_addresses":   reg.IPAddresses,
@@ -139,8 +139,8 @@ func (r *Repository) UpsertRegistration(db *gorm.DB, reg *AgentRegistration) err
 		"poll_interval":  reg.PollInterval,
 		"agent_token_id": reg.AgentTokenID,
 		"last_seen_at":   reg.LastSeenAt,
-		"status":         "active",
-	}).Error
+	}
+	return db.Model(&existing).Updates(updates).Error
 }
 
 // FindRegistrationByAgentID retrieves a registration by agent UUID.

@@ -278,7 +278,17 @@ func (s *Service) RegisterAgent(tenantDB *gorm.DB, tokenID uint, req *RegisterAg
 }
 
 // GetDeploymentsByAgentID returns deployments linked to a specific agent UUID.
+// Returns an error if the agent is disabled.
 func (s *Service) GetDeploymentsByAgentID(tenantDB *gorm.DB, agentID string) ([]AgentDeploymentDTO, error) {
+	// Check agent status
+	reg, err := s.repo.FindRegistrationByAgentID(tenantDB, agentID)
+	if err == nil && reg.Status == "disabled" {
+		s.log.Warn("disabled agent attempted to fetch deployments",
+			zap.String("agent_id", agentID),
+			zap.String("hostname", reg.Hostname),
+		)
+		return nil, fmt.Errorf("agent is disabled")
+	}
 	type deployRow struct {
 		ID              uint
 		CertificateID   uint
@@ -293,7 +303,7 @@ func (s *Service) GetDeploymentsByAgentID(tenantDB *gorm.DB, agentID string) ([]
 	}
 
 	var rows []deployRow
-	err := tenantDB.Raw(`
+	err = tenantDB.Raw(`
 		SELECT d.id, d.certificate_id, d.target_host, d.target_service,
 		       d.target_detail, d.port, d.deploy_status, d.last_fingerprint,
 		       d.agent_id,
@@ -322,6 +332,18 @@ func (s *Service) GetDeploymentsByAgentID(tenantDB *gorm.DB, agentID string) ([]
 		})
 	}
 	return result, nil
+}
+
+// UpdateRegistrationStatus enables or disables an agent registration.
+func (s *Service) UpdateRegistrationStatus(tenantDB *gorm.DB, id uint, status string) error {
+	if status != "active" && status != "disabled" {
+		return fmt.Errorf("invalid status: must be 'active' or 'disabled'")
+	}
+	var reg AgentRegistration
+	if err := tenantDB.Where("id = ? AND deleted_at IS NULL", id).First(&reg).Error; err != nil {
+		return fmt.Errorf("agent not found")
+	}
+	return tenantDB.Model(&reg).Update("status", status).Error
 }
 
 // ListRegistrations returns all registered agents for a tenant.

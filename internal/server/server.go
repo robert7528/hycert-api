@@ -158,6 +158,7 @@ func RegisterRoutes(p RouteParams) {
 		agentRegs := crud.Group("/agent-registrations")
 		{
 			agentRegs.GET("", p.AgentHandler.AdminListRegistrations)
+			agentRegs.PUT("/:id/status", p.AgentHandler.AdminUpdateRegistrationStatus)
 		}
 	}
 
