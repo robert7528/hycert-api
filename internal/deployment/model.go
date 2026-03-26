@@ -15,7 +15,7 @@ type Deployment struct {
 	TargetService string        `gorm:"not null" json:"target_service"`     // nginx / apache / tomcat / k8s
 	TargetDetail  string         `gorm:"type:text" json:"target_detail"`    // path, namespace, etc.
 	Port          *int           `json:"port"`
-	Status          string         `gorm:"default:'active'" json:"status"`    // active / removed
+	Status          string         `gorm:"default:'active'" json:"status"`    // active / disabled
 	DeployedAt      *time.Time     `json:"deployed_at"`
 	DeployedBy      string         `json:"deployed_by"`
 	Notes           string         `gorm:"type:text" json:"notes"`
@@ -60,7 +60,7 @@ type DeploymentListQuery struct {
 	PageSize      int    `form:"page_size,default=20"`
 	CertificateID uint   `form:"certificate_id"`
 	Search        string `form:"search"`        // target_host or target_service substring
-	Status        string `form:"status"`        // active | removed
+	Status        string `form:"status"`        // active | disabled
 	DeployStatus  string `form:"deploy_status"` // pending | deployed | failed
 }
 
