@@ -186,7 +186,18 @@ machine:a1b2c3d4e5f67890a1b2c3d4e5f67890
 }
 ```
 
-### PEM 合併（haproxy / hyproxy）
+### PEM 分開（hyproxy）
+
+```json
+{
+  "os": "linux",
+  "cert_path": "/hyproxy/ssl/cert.pem",
+  "key_path": "/hyproxy/ssl/key.pem",
+  "reload_cmd": "systemctl restart hyproxy"
+}
+```
+
+### PEM 合併（haproxy）
 
 ```json
 {
@@ -299,8 +310,8 @@ machine:a1b2c3d4e5f67890a1b2c3d4e5f67890
 |----------------|------|----------|------|
 | nginx | PEM 分開 | cert + key 分別寫檔 → reload | ✅ Phase 1 |
 | apache | PEM 分開 | cert + key 分別寫檔 → reload | ✅ Phase 1 |
+| hyproxy | PEM 分開 | cert + key 分別寫檔 → reload（同 nginx） | ✅ Phase 1 |
 | haproxy | PEM 合併 | cert + key 合併寫入一個檔案 → reload | ✅ Phase 1 |
-| hyproxy | PEM 合併 | 同 haproxy | ✅ Phase 1 |
 | tomcat | JKS | 下載 JKS keystore → 寫檔 → 重啟 | ✅ Phase 2 |
 | iis | PFX | 下載 PFX → 匯入 → 綁定 → 重啟 | 待做 Phase 2 |
 | kubernetes | TLS Secret | kubectl create secret tls → apply | 待做 Phase 2 |
