@@ -230,8 +230,10 @@ func (s *Service) CreateOrder(db *gorm.DB, req *CreateOrderRequest, username str
 		return nil, fmt.Errorf("save order: %w", err)
 	}
 
-	// Execute ACME flow asynchronously-like but synchronously for now
-	go s.executeOrder(db, order, acct)
+	// Execute ACME flow in background goroutine.
+	// Use a context-free DB session so it survives after HTTP response is sent.
+	bgDB := db.Session(&gorm.Session{NewDB: true})
+	go s.executeOrder(bgDB, order, acct)
 
 	dto := order.ToDTO()
 	return &dto, nil
@@ -307,7 +309,8 @@ func (s *Service) RenewOrder(db *gorm.DB, id uint) (*AcmeOrderDTO, error) {
 	order.Status = "processing"
 	s.repo.UpdateOrder(db, order)
 
-	go s.executeRenewal(db, order, acct)
+	bgDB := db.Session(&gorm.Session{NewDB: true})
+	go s.executeRenewal(bgDB, order, acct)
 
 	dto := order.ToDTO()
 	return &dto, nil
@@ -524,7 +527,8 @@ func (s *Service) ScanAndRenew(db *gorm.DB) error {
 		s.log.Info("triggering auto-renewal", zap.Uint("order_id", order.ID))
 		order.Status = "processing"
 		s.repo.UpdateOrder(db, &order)
-		go s.executeRenewal(db, &order, acct)
+		bgDB := db.Session(&gorm.Session{NewDB: true})
+		go s.executeRenewal(bgDB, &order, acct)
 	}
 
 	return nil
