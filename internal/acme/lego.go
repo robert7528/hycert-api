@@ -20,6 +20,7 @@ import (
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/providers/dns/cloudflare"
 	"github.com/go-acme/lego/v4/providers/dns/duckdns"
+	"github.com/go-acme/lego/v4/providers/dns/route53"
 	"github.com/go-acme/lego/v4/registration"
 	"go.uber.org/zap"
 )
@@ -74,6 +75,28 @@ var dnsProviders = []DNSProviderDef{
 			c := duckdns.NewDefaultConfig()
 			c.Token = cfg["DUCKDNS_TOKEN"]
 			return duckdns.NewDNSProviderConfig(c)
+		},
+	},
+	{
+		Name:  "route53",
+		Label: "AWS Route 53",
+		Fields: []DNSProviderField{
+			{Key: "AWS_ACCESS_KEY_ID", Label: "Access Key ID", Secret: true},
+			{Key: "AWS_SECRET_ACCESS_KEY", Label: "Secret Access Key", Secret: true},
+			{Key: "AWS_REGION", Label: "Region (e.g. ap-northeast-1)", Secret: false},
+			{Key: "AWS_HOSTED_ZONE_ID", Label: "Hosted Zone ID (optional)", Secret: false},
+		},
+		factory: func(cfg map[string]string) (challenge.Provider, error) {
+			c := route53.NewDefaultConfig()
+			c.AccessKeyID = cfg["AWS_ACCESS_KEY_ID"]
+			c.SecretAccessKey = cfg["AWS_SECRET_ACCESS_KEY"]
+			if v := cfg["AWS_REGION"]; v != "" {
+				c.Region = v
+			}
+			if v := cfg["AWS_HOSTED_ZONE_ID"]; v != "" {
+				c.HostedZoneID = v
+			}
+			return route53.NewDNSProviderConfig(c)
 		},
 	},
 	{
