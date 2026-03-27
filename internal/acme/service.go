@@ -1,6 +1,7 @@
 package acme
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -232,7 +233,7 @@ func (s *Service) CreateOrder(db *gorm.DB, req *CreateOrderRequest, username str
 
 	// Execute ACME flow in background goroutine.
 	// Use a context-free DB session so it survives after HTTP response is sent.
-	bgDB := db.Session(&gorm.Session{NewDB: true})
+	bgDB := db.WithContext(context.Background()).Session(&gorm.Session{NewDB: true})
 	go s.executeOrder(bgDB, order, acct)
 
 	dto := order.ToDTO()
@@ -309,7 +310,7 @@ func (s *Service) RenewOrder(db *gorm.DB, id uint) (*AcmeOrderDTO, error) {
 	order.Status = "processing"
 	s.repo.UpdateOrder(db, order)
 
-	bgDB := db.Session(&gorm.Session{NewDB: true})
+	bgDB := db.WithContext(context.Background()).Session(&gorm.Session{NewDB: true})
 	go s.executeRenewal(bgDB, order, acct)
 
 	dto := order.ToDTO()
@@ -527,7 +528,7 @@ func (s *Service) ScanAndRenew(db *gorm.DB) error {
 		s.log.Info("triggering auto-renewal", zap.Uint("order_id", order.ID))
 		order.Status = "processing"
 		s.repo.UpdateOrder(db, &order)
-		bgDB := db.Session(&gorm.Session{NewDB: true})
+		bgDB := db.WithContext(context.Background()).Session(&gorm.Session{NewDB: true})
 		go s.executeRenewal(bgDB, &order, acct)
 	}
 
