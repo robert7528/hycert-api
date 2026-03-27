@@ -1,6 +1,7 @@
 package acme
 
 import (
+	"encoding/json"
 	"time"
 
 	"gorm.io/gorm"
@@ -151,7 +152,7 @@ type CreateOrderRequest struct {
 	Domains         []string `json:"domains" binding:"required"`
 	ChallengeType   string   `json:"challenge_type" binding:"required"` // dns-01 / http-01
 	DNSProvider     string   `json:"dns_provider,omitempty"`            // cloudflare / manual
-	DNSConfig       string   `json:"dns_config,omitempty"`              // JSON credentials (will be Tink-encrypted)
+	DNSConfig       json.RawMessage `json:"dns_config,omitempty"`       // JSON env var map, e.g. {"DUCKDNS_TOKEN": "xxx"}
 	KeyType         string   `json:"key_type,omitempty"`                // ec256 / ec384 / rsa2048 / rsa4096
 	AutoRenew       *bool    `json:"auto_renew,omitempty"`
 	RenewBeforeDays *int     `json:"renew_before_days,omitempty"`

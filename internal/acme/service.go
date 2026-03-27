@@ -191,8 +191,8 @@ func (s *Service) CreateOrder(db *gorm.DB, req *CreateOrderRequest, username str
 
 	// Encrypt DNS config if provided
 	var dnsConfigEnc string
-	if req.DNSConfig != "" {
-		enc, err := s.enc.Encrypt(req.DNSConfig)
+	if len(req.DNSConfig) > 0 && string(req.DNSConfig) != "null" {
+		enc, err := s.enc.Encrypt(string(req.DNSConfig))
 		if err != nil {
 			return nil, fmt.Errorf("encrypt DNS config: %w", err)
 		}

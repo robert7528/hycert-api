@@ -18,6 +18,13 @@ func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
 }
 
+// ── DNS Provider Metadata ────────────────────────────────────────────────────
+
+// ListDNSProviders handles GET /adm/cert/acme/dns-providers
+func (h *Handler) ListDNSProviders(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": GetDNSProviderDefs()})
+}
+
 // ── Account Endpoints ───────────────────────────────────────────────────────
 
 // CreateAccount handles POST /adm/cert/acme/accounts

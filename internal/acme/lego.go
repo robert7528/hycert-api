@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"time"
@@ -18,9 +19,84 @@ import (
 	"github.com/go-acme/lego/v4/challenge/http01"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/providers/dns/cloudflare"
+	"github.com/go-acme/lego/v4/providers/dns/duckdns"
 	"github.com/go-acme/lego/v4/registration"
 	"go.uber.org/zap"
 )
+
+// dnsProviderFactory creates a DNS challenge provider from a JSON config map.
+type dnsProviderFactory func(cfg map[string]string) (challenge.Provider, error)
+
+// DNSProviderField describes a credential field for a DNS provider.
+type DNSProviderField struct {
+	Key    string `json:"key"`    // lego env var name, e.g. "CF_API_TOKEN"
+	Label  string `json:"label"`  // human-readable label
+	Secret bool   `json:"secret"` // mask input in UI
+}
+
+// DNSProviderDef describes a DNS provider for both runtime and UI.
+type DNSProviderDef struct {
+	Name    string             `json:"name"`
+	Label   string             `json:"label"`
+	Fields  []DNSProviderField `json:"fields"`
+	factory dnsProviderFactory `json:"-"`
+}
+
+// dnsProviders is the single source of truth for supported DNS providers.
+// To add a new provider:
+//  1. Import the provider package
+//  2. Add a DNSProviderDef entry here
+var dnsProviders = []DNSProviderDef{
+	{
+		Name:  "cloudflare",
+		Label: "Cloudflare",
+		Fields: []DNSProviderField{
+			{Key: "CF_API_TOKEN", Label: "API Token", Secret: true},
+		},
+		factory: func(cfg map[string]string) (challenge.Provider, error) {
+			c := cloudflare.NewDefaultConfig()
+			if v := cfg["CF_API_TOKEN"]; v != "" {
+				c.AuthToken = v
+			} else if v := cfg["CF_API_KEY"]; v != "" {
+				c.AuthKey = v
+				c.AuthEmail = cfg["CF_API_EMAIL"]
+			}
+			return cloudflare.NewDNSProviderConfig(c)
+		},
+	},
+	{
+		Name:  "duckdns",
+		Label: "DuckDNS",
+		Fields: []DNSProviderField{
+			{Key: "DUCKDNS_TOKEN", Label: "Token", Secret: true},
+		},
+		factory: func(cfg map[string]string) (challenge.Provider, error) {
+			c := duckdns.NewDefaultConfig()
+			c.Token = cfg["DUCKDNS_TOKEN"]
+			return duckdns.NewDNSProviderConfig(c)
+		},
+	},
+	{
+		Name:   "manual",
+		Label:  "Manual",
+		Fields: []DNSProviderField{},
+	},
+}
+
+// dnsProviderMap is built from dnsProviders for O(1) lookup.
+var dnsProviderMap map[string]*DNSProviderDef
+
+func init() {
+	dnsProviderMap = make(map[string]*DNSProviderDef, len(dnsProviders))
+	for i := range dnsProviders {
+		dnsProviderMap[dnsProviders[i].Name] = &dnsProviders[i]
+	}
+}
+
+// GetDNSProviderDefs returns the provider definitions for the UI.
+func GetDNSProviderDefs() []DNSProviderDef {
+	return dnsProviders
+}
 
 // LegoUser implements lego's registration.User interface.
 type LegoUser struct {
@@ -31,7 +107,7 @@ type LegoUser struct {
 
 func (u *LegoUser) GetEmail() string                        { return u.Email }
 func (u *LegoUser) GetRegistration() *registration.Resource { return u.Registration }
-func (u *LegoUser) GetPrivateKey() crypto.PrivateKey         { return u.Key }
+func (u *LegoUser) GetPrivateKey() crypto.PrivateKey        { return u.Key }
 
 // LegoClient wraps lego ACME operations.
 type LegoClient struct {
@@ -94,7 +170,6 @@ func (lc *LegoClient) ObtainCertificate(user *LegoUser, directoryURL string, dom
 		return nil, fmt.Errorf("create ACME client: %w", err)
 	}
 
-	// Set up challenge provider
 	if err := lc.setupChallenge(client, challengeType, dnsProvider, dnsConfig); err != nil {
 		return nil, err
 	}
@@ -193,32 +268,34 @@ func (lc *LegoClient) setupChallenge(client *lego.Client, challengeType, dnsProv
 	}
 }
 
-func (lc *LegoClient) createDNSProvider(provider, config string) (challenge.Provider, error) {
-	switch provider {
-	case "cloudflare":
-		return cloudflare.NewDNSProviderConfig(lc.parseCloudflareConfig(config))
-	case "manual":
+// createDNSProvider creates a DNS-01 challenge provider.
+// config is a JSON string with env var key-value pairs, e.g.:
+//
+//	{"DUCKDNS_TOKEN": "xxx"}
+//	{"CF_API_TOKEN": "xxx"}
+func (lc *LegoClient) createDNSProvider(providerName, config string) (challenge.Provider, error) {
+	if providerName == "manual" {
 		return NewManualDNSProvider(lc.log), nil
-	default:
-		return nil, fmt.Errorf("unsupported DNS provider: %s (supported: cloudflare, manual)", provider)
 	}
-}
 
+	def, ok := dnsProviderMap[providerName]
+	if !ok || def.factory == nil {
+		names := make([]string, 0, len(dnsProviders))
+		for _, d := range dnsProviders {
+			names = append(names, d.Name)
+		}
+		return nil, fmt.Errorf("unsupported DNS provider: %q (supported: %v)", providerName, names)
+	}
 
-func (lc *LegoClient) parseCloudflareConfig(config string) *cloudflare.Config {
-	cfg := cloudflare.NewDefaultConfig()
-	// Config is a JSON string with "api_token" field.
-	// The actual parsing is handled by environment variable injection
-	// through lego's standard mechanism, or via the config struct.
-	//
-	// For now, set the API token from the JSON config.
-	// In production, credentials come from Tink-encrypted dns_config_enc.
+	// Parse config JSON → env var map
+	cfg := make(map[string]string)
 	if config != "" {
-		// Simple extraction: config is expected to be the API token directly
-		// or a JSON {"api_token": "..."} — service layer handles parsing.
-		cfg.AuthToken = config
+		if err := json.Unmarshal([]byte(config), &cfg); err != nil {
+			return nil, fmt.Errorf("parse dns_config: %w (expected {\"ENV_VAR\": \"value\", ...})", err)
+		}
 	}
-	return cfg
+
+	return def.factory(cfg)
 }
 
 func (lc *LegoClient) parseKeyType(keyType string) certcrypto.KeyType {

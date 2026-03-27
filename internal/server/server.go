@@ -141,6 +141,9 @@ func RegisterRoutes(p RouteParams) {
 			deploys.GET("/:id/history", p.AgentHandler.GetDeploymentHistory)
 		}
 
+		// ACME DNS Providers (metadata, no DB needed)
+		crud.GET("/acme/dns-providers", p.AcmeHandler.ListDNSProviders)
+
 		// ACME Accounts
 		acmeAccts := crud.Group("/acme/accounts")
 		{
