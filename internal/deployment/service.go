@@ -94,6 +94,10 @@ func (s *Service) Update(db *gorm.DB, id uint, req *UpdateDeploymentRequest) (*D
 		return nil, err
 	}
 
+	if req.CertificateID != nil {
+		d.CertificateID = *req.CertificateID
+		d.DeployStatus = "pending" // reset deploy status when cert changes
+	}
 	if req.TargetHost != nil {
 		d.TargetHost = *req.TargetHost
 	}

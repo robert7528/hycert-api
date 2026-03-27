@@ -44,6 +44,7 @@ type CreateDeploymentRequest struct {
 
 // UpdateDeploymentRequest is the payload for updating a deployment record.
 type UpdateDeploymentRequest struct {
+	CertificateID *uint   `json:"certificate_id,omitempty"`
 	TargetHost    *string `json:"target_host,omitempty"`
 	TargetService *string `json:"target_service,omitempty"`
 	TargetDetail  *string `json:"target_detail,omitempty"`
