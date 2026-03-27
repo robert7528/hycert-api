@@ -56,6 +56,13 @@ type ImportResult struct {
 	Warnings    []chain.Warning `json:"warnings,omitempty"`
 }
 
+func sourceOrDefault(s string) string {
+	if s != "" {
+		return s
+	}
+	return "manual"
+}
+
 // Import parses, validates, and stores a certificate.
 func (s *Service) Import(db *gorm.DB, req *ImportRequest, username string) (*ImportResult, error) {
 	// 1. Parse input
@@ -168,7 +175,7 @@ func (s *Service) Import(db *gorm.DB, req *ImportRequest, username string) (*Imp
 		KeyAlgorithm:      keyAlgo,
 		FingerprintSHA256: fingerprint,
 		Status:            status,
-		Source:            "manual",
+		Source:            sourceOrDefault(req.Source),
 		CertPEM:           certPEM,
 		PrivateKeyEnc:     privateKeyEnc,
 		KeyEncrypted:      keyEncrypted,

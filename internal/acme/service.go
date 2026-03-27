@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	legocert "github.com/go-acme/lego/v4/certificate"
@@ -485,12 +486,20 @@ func (s *Service) decryptDNSConfig(order *AcmeOrder) (string, error) {
 }
 
 func (s *Service) importACMECert(db *gorm.DB, certResource *legocert.Resource, order *AcmeOrder) (uint, error) {
-	// Build import request using the certificate PEM from ACME
+	// Format name: "ACME: k00-hysp.duckdns.org" or "ACME: a.com, b.com"
+	var domains []string
+	json.Unmarshal([]byte(order.Domains), &domains)
+	name := "ACME"
+	if len(domains) > 0 {
+		name = fmt.Sprintf("ACME: %s", strings.Join(domains, ", "))
+	}
+
 	importReq := &certpkg.ImportRequest{
 		Certificate: string(certResource.Certificate),
 		PrivateKey:  string(certResource.PrivateKey),
 		InputType:   "pem",
-		Name:        fmt.Sprintf("ACME: %s", order.Domains),
+		Name:        name,
+		Source:      "acme",
 	}
 
 	result, err := s.certSvc.Import(db, importReq, "acme-auto")

@@ -92,6 +92,7 @@ type ImportRequest struct {
 	Name        string `json:"name,omitempty"`         // user-defined display name
 	Tags        string `json:"tags,omitempty"`         // JSON array
 	Notes       string `json:"notes,omitempty"`
+	Source      string `json:"source,omitempty"`       // manual | acme (default: manual)
 }
 
 // UpdateRequest is the payload for updating certificate metadata.
