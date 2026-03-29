@@ -10,6 +10,7 @@ import (
 	"github.com/hysp/hycert-api/internal/agent"
 	"github.com/hysp/hycert-api/internal/certificate"
 	"github.com/hysp/hycert-api/internal/csr"
+	"github.com/hysp/hycert-api/internal/dashboard"
 	"github.com/hysp/hycert-api/internal/deployment"
 	"github.com/hysp/hycert-api/internal/health"
 	"github.com/hysp/hycert-api/internal/utility"
@@ -56,6 +57,9 @@ type RouteParams struct {
 
 	// ACME handler
 	AcmeHandler *acme.Handler
+
+	// Dashboard handler
+	DashboardHandler *dashboard.Handler
 }
 
 func RegisterRoutes(p RouteParams) {
@@ -108,11 +112,15 @@ func RegisterRoutes(p RouteParams) {
 		crud.Use(middleware.TenantDBMiddleware(p.DBManager))
 		crud.Use(coreauditlog.AuditMiddleware(p.DB))
 
+		// Dashboard
+		crud.GET("/dashboard/health", p.DashboardHandler.GetHealthSummary)
+
 		// Certificates
 		certs := crud.Group("/certificates")
 		{
 			certs.POST("", p.CertHandler.Import)
 			certs.GET("", p.CertHandler.List)
+			certs.GET("/expiring", p.CertHandler.ExpiringWarnings)
 			certs.GET("/:id", p.CertHandler.Get)
 			certs.PUT("/:id", p.CertHandler.Update)
 			certs.DELETE("/:id", p.CertHandler.Delete)

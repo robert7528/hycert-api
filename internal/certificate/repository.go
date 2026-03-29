@@ -2,6 +2,7 @@ package certificate
 
 import (
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -103,4 +104,20 @@ func (r *Repository) Update(db *gorm.DB, cert *Certificate) error {
 // Delete soft-deletes a certificate.
 func (r *Repository) Delete(db *gorm.DB, id uint) error {
 	return db.Delete(&Certificate{}, id).Error
+}
+
+// ExpireActiveCertificates updates active certificates past their expiry to "expired".
+func (r *Repository) ExpireActiveCertificates(db *gorm.DB) (int64, error) {
+	result := db.Model(&Certificate{}).
+		Where("status = ? AND not_after < NOW()", "active").
+		Updates(map[string]interface{}{"status": "expired", "updated_at": time.Now()})
+	return result.RowsAffected, result.Error
+}
+
+// FindExpiringSoon returns active certificates expiring within the given number of days.
+func (r *Repository) FindExpiringSoon(db *gorm.DB, days int) ([]Certificate, error) {
+	var certs []Certificate
+	err := db.Where("status = ? AND not_after <= NOW() + INTERVAL '1 day' * ? AND not_after > NOW()", "active", days).
+		Order("not_after ASC").Find(&certs).Error
+	return certs, err
 }

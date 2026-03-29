@@ -4,6 +4,7 @@ import (
 	"github.com/hysp/hycert-api/internal/acme"
 	"github.com/hysp/hycert-api/internal/agent"
 	"github.com/hysp/hycert-api/internal/certificate"
+	"github.com/hysp/hycert-api/internal/dashboard"
 	"github.com/hysp/hycert-api/internal/chain"
 	"github.com/hysp/hycert-api/internal/converter"
 	"github.com/hysp/hycert-api/internal/csr"
@@ -78,6 +79,9 @@ func Run() error {
 			// Health
 			health.NewHandler,
 
+			// Dashboard
+			dashboard.NewHandler,
+
 			// ── New: Agent ──────────────────────────────────────────────
 			agent.NewRepository,
 			agent.NewService,
@@ -102,6 +106,7 @@ func Run() error {
 					Enabled:         viper.GetBool("scheduler.enabled"),
 					RenewalCron:     viper.GetString("scheduler.renewal_cron"),
 					RenewBeforeDays: viper.GetInt("scheduler.renewal_before_days"),
+					ExpirySyncCron:  viper.GetString("scheduler.expiry_sync_cron"),
 				}
 			},
 			scheduler.New,

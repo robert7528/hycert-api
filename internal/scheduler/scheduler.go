@@ -13,6 +13,7 @@ type Config struct {
 	Enabled          bool   `mapstructure:"enabled"`
 	RenewalCron      string `mapstructure:"renewal_cron"`
 	RenewBeforeDays  int    `mapstructure:"renewal_before_days"`
+	ExpirySyncCron   string `mapstructure:"expiry_sync_cron"`
 }
 
 // Scheduler manages cron jobs with fx lifecycle integration.

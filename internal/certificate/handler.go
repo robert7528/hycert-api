@@ -2,8 +2,11 @@ package certificate
 
 import (
 	"encoding/base64"
+	"math"
 	"net/http"
 	"strconv"
+	"time"
+
 
 	"github.com/gin-gonic/gin"
 	"github.com/robert7528/hycore/middleware"
@@ -221,4 +224,40 @@ func (h *Handler) Download(c *gin.Context) {
 			},
 		})
 	}
+}
+
+// ExpiringWarnings handles GET /certificates/expiring?days=30
+func (h *Handler) ExpiringWarnings(c *gin.Context) {
+	db := middleware.GetTenantDB(c)
+	if db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": gin.H{"code": "DB_UNAVAILABLE", "message": "tenant database unavailable"}})
+		return
+	}
+
+	days := 30
+	if d, err := strconv.Atoi(c.DefaultQuery("days", "30")); err == nil && d > 0 {
+		days = d
+	}
+
+	dtos, err := h.svc.FindExpiringSoon(db, days)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": gin.H{"code": "QUERY_FAILED", "message": err.Error()}})
+		return
+	}
+
+	// Add days_remaining to each item
+	type expiringCert struct {
+		CertificateDTO
+		DaysRemaining int `json:"days_remaining"`
+	}
+	items := make([]expiringCert, 0, len(dtos))
+	for _, d := range dtos {
+		remaining := 0
+		if d.NotAfter != nil {
+			remaining = int(math.Ceil(time.Until(*d.NotAfter).Hours() / 24))
+		}
+		items = append(items, expiringCert{CertificateDTO: d, DaysRemaining: remaining})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"items": items, "total": len(items)}})
 }

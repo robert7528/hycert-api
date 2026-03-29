@@ -482,3 +482,16 @@ func extractSANsList(cert *x509.Certificate) []string {
 	}
 	return sans
 }
+
+// FindExpiringSoon returns active certificates expiring within the given number of days.
+func (s *Service) FindExpiringSoon(db *gorm.DB, days int) ([]CertificateDTO, error) {
+	certs, err := s.repo.FindExpiringSoon(db, days)
+	if err != nil {
+		return nil, err
+	}
+	dtos := make([]CertificateDTO, 0, len(certs))
+	for _, c := range certs {
+		dtos = append(dtos, c.ToDTO())
+	}
+	return dtos, nil
+}
