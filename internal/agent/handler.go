@@ -475,3 +475,25 @@ func (h *Handler) AdminListRegistrations(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": resp})
 }
+
+// AdminDeleteRegistration handles DELETE /adm/cert/agent-registrations/:id
+func (h *Handler) AdminDeleteRegistration(c *gin.Context) {
+	db := middleware.GetTenantDB(c)
+	if db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": gin.H{"code": "DB_UNAVAILABLE", "message": "tenant database unavailable"}})
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{"code": "INVALID_ID", "message": "invalid agent ID"}})
+		return
+	}
+
+	if err := db.Delete(&AgentRegistration{}, uint(id)).Error; err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"success": false, "error": gin.H{"code": "DELETE_FAILED", "message": err.Error()}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"message": "agent registration deleted"}})
+}

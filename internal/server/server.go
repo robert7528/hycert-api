@@ -175,6 +175,7 @@ func RegisterRoutes(p RouteParams) {
 		{
 			agentRegs.GET("", p.AgentHandler.AdminListRegistrations)
 			agentRegs.PUT("/:id/status", p.AgentHandler.AdminUpdateRegistrationStatus)
+			agentRegs.DELETE("/:id", p.AgentHandler.AdminDeleteRegistration)
 		}
 	}
 
