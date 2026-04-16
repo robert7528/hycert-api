@@ -26,15 +26,15 @@ SSL 憑證續約流程升級 — 請協助新增 DNS 設定（一次性）
 |---|---|
 | 類型 | CNAME |
 | 名稱 | `_acme-challenge.【客戶域名】` |
-| 值 | `_acme-challenge.【客戶域名】.acme.【委派目標域名】.` |
+| 值 | `_acme-challenge.【客戶域名】.acme.k00.com.tw.` |
 | TTL | 預設值即可（或填 3600） |
 
 ### 實際設定值
 
 | 名稱（Name） | 類型 | 目標值（Value） |
 |---|---|---|
-| `_acme-challenge.【客戶域名1】` | CNAME | `_acme-challenge.【客戶域名1】.acme.【委派目標域名】.` |
-| `_acme-challenge.【客戶域名2】` | CNAME | `_acme-challenge.【客戶域名2】.acme.【委派目標域名】.` |
+| `_acme-challenge.【客戶域名1】` | CNAME | `_acme-challenge.【客戶域名1】.acme.k00.com.tw.` |
+| `_acme-challenge.【客戶域名2】` | CNAME | `_acme-challenge.【客戶域名2】.acme.k00.com.tw.` |
 
 > **提示**：如果貴單位的 DNS 管理介面是在 zone 內操作（例如 `example.edu.tw` zone），名稱欄位可填相對名稱（如 `_acme-challenge.hylib`），系統會自動補上 zone 名稱。
 
@@ -123,7 +123,6 @@ _acme-challenge.hylib.example.edu.tw  canonical name = _acme-challenge.hylib.exa
 | 變數 | 說明 | 範例 |
 |---|---|---|
 | 【客戶域名】 | 客戶的網域名稱 | hylib.ntus.edu.tw |
-| 【委派目標域名】 | 我方管理的 DNS 域名 | k00.com.tw |
 | 【客戶名稱】 | 客戶公司／單位名稱 | XX 大學 / XX 公司 |
 | 【聯絡人】 | 收件人稱謂 | 王先生 / 您 |
 | 【我方公司名稱】 | 公司名稱 | XX 資訊股份有限公司 |
