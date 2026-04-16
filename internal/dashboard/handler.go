@@ -56,8 +56,8 @@ func (h *Handler) GetHealthSummary(c *gin.Context) {
 		})
 	}
 
-	// 2. Expired but still marked active
-	var expiredActive []struct {
+	// 2. Expired certificates that still have active deployments
+	var expiredDeployed []struct {
 		ID         uint
 		Name       string
 		CommonName string
@@ -65,13 +65,18 @@ func (h *Handler) GetHealthSummary(c *gin.Context) {
 		Source     string
 	}
 	tenantDB.Table("hycert_certificates").
-		Select("id, name, common_name, not_after, source").
-		Where("status = 'active' AND not_after < NOW() AND deleted_at IS NULL").
-		Find(&expiredActive)
-	for _, c := range expiredActive {
+		Select("hycert_certificates.id, hycert_certificates.name, hycert_certificates.common_name, hycert_certificates.not_after, hycert_certificates.source").
+		Where("hycert_certificates.not_after < NOW() AND hycert_certificates.deleted_at IS NULL AND EXISTS (SELECT 1 FROM hycert_deployments d WHERE d.certificate_id = hycert_certificates.id AND d.status = 'active' AND d.deleted_at IS NULL)").
+		Find(&expiredDeployed)
+	for _, c := range expiredDeployed {
+		days := 0
+		if c.NotAfter != nil {
+			d := int(math.Ceil(time.Since(*c.NotAfter).Hours() / 24))
+			days = -d // negative = expired N days ago
+		}
 		summary.CertsExpiredActive = append(summary.CertsExpiredActive, CertWarning{
 			ID: c.ID, Name: c.Name, CommonName: c.CommonName,
-			NotAfter: c.NotAfter, DaysRemaining: 0, Source: c.Source,
+			NotAfter: c.NotAfter, DaysRemaining: days, Source: c.Source,
 		})
 	}
 
