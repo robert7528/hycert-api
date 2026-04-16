@@ -164,7 +164,8 @@ func (lc *LegoClient) GenerateAccountKey() (crypto.PrivateKey, string, error) {
 }
 
 // Register registers an ACME account with the given directory URL.
-func (lc *LegoClient) Register(user *LegoUser, directoryURL string) (*registration.Resource, error) {
+// If eabKID and eabHMACKey are provided, uses External Account Binding (required by Sectigo, ZeroSSL, etc.).
+func (lc *LegoClient) Register(user *LegoUser, directoryURL, eabKID, eabHMACKey string) (*registration.Resource, error) {
 	config := lego.NewConfig(user)
 	config.CADirURL = directoryURL
 	config.Certificate.KeyType = certcrypto.EC256
@@ -174,7 +175,16 @@ func (lc *LegoClient) Register(user *LegoUser, directoryURL string) (*registrati
 		return nil, fmt.Errorf("create ACME client: %w", err)
 	}
 
-	reg, err := client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
+	var reg *registration.Resource
+	if eabKID != "" && eabHMACKey != "" {
+		reg, err = client.Registration.RegisterWithExternalAccountBinding(registration.RegisterEABOptions{
+			TermsOfServiceAgreed: true,
+			Kid:                  eabKID,
+			HmacEncoded:          eabHMACKey,
+		})
+	} else {
+		reg, err = client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
+	}
 	if err != nil {
 		return nil, fmt.Errorf("register ACME account: %w", err)
 	}

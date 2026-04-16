@@ -12,17 +12,19 @@ import (
 func (AcmeAccount) TableName() string { return "hycert_acme_accounts" }
 
 type AcmeAccount struct {
-	ID            uint           `gorm:"primaryKey" json:"id"`
-	Name          string         `gorm:"not null" json:"name"`
-	Email         string         `gorm:"not null" json:"email"`
-	DirectoryURL  string         `gorm:"column:directory_url;not null" json:"directory_url"`
-	PrivateKeyEnc string         `gorm:"column:private_key_enc;type:text;not null" json:"-"`
-	Registration  string         `gorm:"type:jsonb" json:"registration"`
-	Status        string         `gorm:"default:'active'" json:"status"` // active / inactive
-	CreatedBy     string         `json:"created_by"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+	ID             uint           `gorm:"primaryKey" json:"id"`
+	Name           string         `gorm:"not null" json:"name"`
+	Email          string         `gorm:"not null" json:"email"`
+	DirectoryURL   string         `gorm:"column:directory_url;not null" json:"directory_url"`
+	PrivateKeyEnc  string         `gorm:"column:private_key_enc;type:text;not null" json:"-"`
+	EabKID         string         `gorm:"column:eab_kid" json:"-"`
+	EabHMACKeyEnc  string         `gorm:"column:eab_hmac_key_enc;type:text" json:"-"`
+	Registration   string         `gorm:"type:jsonb" json:"registration"`
+	Status         string         `gorm:"default:'active'" json:"status"` // active / inactive
+	CreatedBy      string         `json:"created_by"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 type AcmeAccountDTO struct {
@@ -30,6 +32,8 @@ type AcmeAccountDTO struct {
 	Name         string    `json:"name"`
 	Email        string    `json:"email"`
 	DirectoryURL string    `json:"directory_url"`
+	HasEAB       bool      `json:"has_eab"`
+	EabKID       string    `json:"eab_kid,omitempty"`
 	Registration string    `json:"registration"`
 	Status       string    `json:"status"`
 	CreatedBy    string    `json:"created_by"`
@@ -43,6 +47,8 @@ func (a *AcmeAccount) ToDTO() AcmeAccountDTO {
 		Name:         a.Name,
 		Email:        a.Email,
 		DirectoryURL: a.DirectoryURL,
+		HasEAB:       a.EabKID != "",
+		EabKID:       a.EabKID,
 		Registration: a.Registration,
 		Status:       a.Status,
 		CreatedBy:    a.CreatedBy,
@@ -125,6 +131,8 @@ type CreateAccountRequest struct {
 	Name         string `json:"name" binding:"required"`
 	Email        string `json:"email" binding:"required"`
 	DirectoryURL string `json:"directory_url" binding:"required"` // e.g. https://acme-v02.api.letsencrypt.org/directory
+	EabKID       string `json:"eab_kid,omitempty"`                // EAB Key Identifier (required by Sectigo, ZeroSSL, etc.)
+	EabHMACKey   string `json:"eab_hmac_key,omitempty"`           // EAB HMAC Key (Base64URL-encoded)
 }
 
 type UpdateAccountRequest struct {

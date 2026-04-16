@@ -52,12 +52,12 @@ func (s *Service) CreateAccount(db *gorm.DB, req *CreateAccountRequest, username
 		return nil, err
 	}
 
-	// Register with ACME server
+	// Register with ACME server (with optional EAB)
 	user := &LegoUser{
 		Email: req.Email,
 		Key:   privKey,
 	}
-	reg, err := s.lego.Register(user, req.DirectoryURL)
+	reg, err := s.lego.Register(user, req.DirectoryURL, req.EabKID, req.EabHMACKey)
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +68,15 @@ func (s *Service) CreateAccount(db *gorm.DB, req *CreateAccountRequest, username
 		return nil, fmt.Errorf("encrypt account key: %w", err)
 	}
 
+	// Tink-encrypt EAB HMAC key if provided
+	var eabHMACKeyEnc string
+	if req.EabHMACKey != "" {
+		eabHMACKeyEnc, err = s.enc.Encrypt(req.EabHMACKey)
+		if err != nil {
+			return nil, fmt.Errorf("encrypt EAB HMAC key: %w", err)
+		}
+	}
+
 	// Serialize registration
 	regJSON, _ := json.Marshal(reg)
 
@@ -76,6 +85,8 @@ func (s *Service) CreateAccount(db *gorm.DB, req *CreateAccountRequest, username
 		Email:         req.Email,
 		DirectoryURL:  req.DirectoryURL,
 		PrivateKeyEnc: encKey,
+		EabKID:        req.EabKID,
+		EabHMACKeyEnc: eabHMACKeyEnc,
 		Registration:  string(regJSON),
 		Status:        "active",
 		CreatedBy:     username,
