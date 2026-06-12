@@ -19,7 +19,7 @@ type Certificate struct {
 	NotAfter          *time.Time     `json:"not_after"`
 	KeyAlgorithm      string         `json:"key_algorithm"`                         // RSA 2048 / EC P-256
 	FingerprintSHA256 string         `gorm:"column:fingerprint_sha256;index" json:"fingerprint_sha256"`
-	Status            string         `gorm:"default:'active';index" json:"status"`  // active / expired / revoked
+	Status            string         `gorm:"default:'active';index" json:"status"`  // active / expired / revoked / superseded (ACME 續約後舊卡)
 	Source            string         `gorm:"default:'manual'" json:"source"`        // manual / csr / acme
 	CertPEM           string         `gorm:"column:cert_pem;type:text;not null" json:"-"` // cert + chain PEM
 	PrivateKeyEnc     string         `gorm:"type:text" json:"-"`                    // Tink-encrypted private key

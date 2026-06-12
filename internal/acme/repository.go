@@ -119,16 +119,34 @@ func (r *Repository) DeleteOrder(db *gorm.DB, id uint) error {
 
 // FindRenewableOrders finds orders due for renewal across all active auto-renew orders.
 // An order is renewable when its associated certificate expires within renew_before_days.
+//
+// Besides healthy 'valid' orders, this also picks up:
+//   - 'failed' renewals (retry_count < 5) with exponential backoff, so a transient
+//     failure no longer freezes the order forever. Permanent config errors stop after
+//     5 attempts and are surfaced on the dashboard for manual handling.
+//   - 'processing' orders stuck > 1h (e.g. process restarted mid-renewal).
+//
+// Note: the INNER JOIN on certificate_id means failed *initial* issuances (no cert yet)
+// are never auto-retried here — by design they are surfaced on the dashboard instead.
 func (r *Repository) FindRenewableOrders(db *gorm.DB) ([]AcmeOrder, error) {
 	var orders []AcmeOrder
 	err := db.Raw(`
 		SELECT o.* FROM hycert_acme_orders o
 		JOIN hycert_certificates c ON c.id = o.certificate_id AND c.deleted_at IS NULL
 		WHERE o.auto_renew = true
-		  AND o.status = 'valid'
 		  AND o.deleted_at IS NULL
 		  AND c.not_after <= NOW() + INTERVAL '1 day' * o.renew_before_days
 		  AND c.not_after > NOW()
+		  AND (
+		        o.status = 'valid'
+		     OR (o.status = 'failed'
+		         AND o.retry_count < 5
+		         AND (o.last_attempt_at IS NULL
+		              OR o.last_attempt_at <= NOW() - INTERVAL '6 hours' * power(2, o.retry_count)))
+		     OR (o.status = 'processing'
+		         AND (o.last_attempt_at IS NULL
+		              OR o.last_attempt_at <= NOW() - INTERVAL '1 hour'))
+		  )
 	`).Scan(&orders).Error
 	return orders, err
 }

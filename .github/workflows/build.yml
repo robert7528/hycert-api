@@ -3,6 +3,8 @@ name: Build & Push
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 env:
   IMAGE: ghcr.io/robert7528/hycert-api
@@ -30,6 +32,9 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    # Only build & push the image on a real push to main. On pull requests we
+    # only run govulncheck (compile + vuln check) — no image is built or pushed.
+    if: github.event_name == 'push'
     permissions:
       contents: read
       packages: write

@@ -77,6 +77,8 @@ type AcmeOrder struct {
 	AutoRenew       bool           `gorm:"default:true" json:"auto_renew"`
 	RenewBeforeDays int            `gorm:"default:30" json:"renew_before_days"`
 	LastRenewedAt   *time.Time     `json:"last_renewed_at"`
+	RetryCount      int            `gorm:"default:0" json:"retry_count"`           // 續約失敗累計次數，達上限停止自動重試
+	LastAttemptAt   *time.Time     `gorm:"column:last_attempt_at" json:"last_attempt_at"` // 最近一次續約嘗試時間，用於 backoff
 	RequestedBy     string         `json:"requested_by"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
@@ -98,6 +100,8 @@ type AcmeOrderDTO struct {
 	AutoRenew       bool       `json:"auto_renew"`
 	RenewBeforeDays int        `json:"renew_before_days"`
 	LastRenewedAt   *time.Time `json:"last_renewed_at"`
+	RetryCount      int        `json:"retry_count"`
+	LastAttemptAt   *time.Time `json:"last_attempt_at"`
 	RequestedBy     string     `json:"requested_by"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
@@ -119,6 +123,8 @@ func (o *AcmeOrder) ToDTO() AcmeOrderDTO {
 		AutoRenew:       o.AutoRenew,
 		RenewBeforeDays: o.RenewBeforeDays,
 		LastRenewedAt:   o.LastRenewedAt,
+		RetryCount:      o.RetryCount,
+		LastAttemptAt:   o.LastAttemptAt,
 		RequestedBy:     o.RequestedBy,
 		CreatedAt:       o.CreatedAt,
 		UpdatedAt:       o.UpdatedAt,
