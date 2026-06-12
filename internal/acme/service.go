@@ -449,9 +449,12 @@ func (s *Service) executeRenewal(db *gorm.DB, order *AcmeOrder, acct *AcmeAccoun
 	order.CertificateID = &certID
 	order.Status = "valid"
 	order.LastRenewedAt = &now
+	order.RetryCount = 0
 	s.repo.UpdateOrder(db, order)
 
-	// Update deployments pointing to old certificate → new certificate
+	// Update deployments pointing to old certificate → new certificate,
+	// then mark the old certificate as superseded so it drops off the
+	// "expiring soon" health dashboard (which only counts status = 'active').
 	if oldCertID != nil {
 		db.Table("hycert_deployments").
 			Where("certificate_id = ? AND status = 'active' AND deleted_at IS NULL", *oldCertID).
@@ -459,6 +462,12 @@ func (s *Service) executeRenewal(db *gorm.DB, order *AcmeOrder, acct *AcmeAccoun
 				"certificate_id": certID,
 				"deploy_status":  "pending",
 				"updated_at":     now,
+			})
+		db.Table("hycert_certificates").
+			Where("id = ? AND status = 'active'", *oldCertID).
+			Updates(map[string]interface{}{
+				"status":     "superseded",
+				"updated_at": now,
 			})
 	}
 
@@ -522,10 +531,27 @@ func (s *Service) importACMECert(db *gorm.DB, certResource *legocert.Resource, o
 }
 
 func (s *Service) failOrder(db *gorm.DB, order *AcmeOrder, err error) {
-	s.log.Error("ACME order failed", zap.Uint("order_id", order.ID), zap.Error(err))
+	now := time.Now()
 	order.Status = "failed"
 	order.ErrorMessage = err.Error()
+	order.RetryCount++
+	order.LastAttemptAt = &now
+	s.log.Error("ACME order failed", zap.Uint("order_id", order.ID),
+		zap.Int("retry_count", order.RetryCount), zap.Error(err))
 	s.repo.UpdateOrder(db, order)
+}
+
+// safeGo runs fn in a goroutine with panic recovery, so a failure inside a
+// background renewal can never crash the process (replaces a bare `go ...`).
+func (s *Service) safeGo(fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				s.log.Error("recovered panic in background goroutine", zap.Any("panic", r))
+			}
+		}()
+		fn()
+	}()
 }
 
 // ── Renewal Scanner (called by scheduler) ───────────────────────────────────
@@ -545,11 +571,14 @@ func (s *Service) ScanAndRenew(db *gorm.DB) error {
 			continue
 		}
 
-		s.log.Info("triggering auto-renewal", zap.Uint("order_id", order.ID))
+		s.log.Info("triggering auto-renewal", zap.Uint("order_id", order.ID), zap.Int("retry_count", order.RetryCount))
+		now := time.Now()
 		order.Status = "processing"
+		order.LastAttemptAt = &now
 		s.repo.UpdateOrder(db, &order)
 		bgDB := db.WithContext(context.Background()).Session(&gorm.Session{NewDB: true})
-		go s.executeRenewal(bgDB, &order, acct)
+		order := order // per-iteration copy captured by the goroutine
+		s.safeGo(func() { s.executeRenewal(bgDB, &order, acct) })
 	}
 
 	return nil
