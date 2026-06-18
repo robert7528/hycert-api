@@ -85,7 +85,8 @@ func (s *Service) Import(db *gorm.DB, req *ImportRequest, username string) (*Imp
 	keyAlgo := describeKeyAlgorithm(leaf)
 	fingerprint := computeSHA256Fingerprint(leaf)
 
-	sans, _ := json.Marshal(extractSANsList(leaf))
+	certSANs := extractSANsList(leaf)
+	sans, _ := json.Marshal(certSANs)
 
 	// 3. Check duplicate by fingerprint
 	existing, err := s.repo.FindByFingerprint(db, fingerprint)
@@ -184,20 +185,83 @@ func (s *Service) Import(db *gorm.DB, req *ImportRequest, username string) (*Imp
 		CreatedBy:         username,
 	}
 
-	// 8b. Auto-link pending CSR by CN match
-	var matchedCSR struct {
+	// 8b. Auto-link pending CSR.
+	// Primary: exact CN match. Fallback: identifier (CN + SAN) overlap — required
+	// for wildcard / CN-less certs, where the issued leaf's CN often differs from
+	// the CSR's CN (e.g. CSR CN "libsearch.naer.edu.tw" but the cert is issued as
+	// "*.libsearch.naer.edu.tw" or with no CN). Without the fallback the CSR's
+	// stored private key cannot auto-attach and stays locked in the CSR.
+	type csrRow struct {
 		ID            uint   `gorm:"primaryKey"`
+		CommonName    string `gorm:"column:common_name"`
+		SANs          string `gorm:"column:sans"`
 		PrivateKeyEnc string `gorm:"column:private_key_enc"`
 	}
-	csrMatch := db.Table("hycert_csrs").
-		Where("common_name = ? AND status = ? AND deleted_at IS NULL", cn, "pending").
-		First(&matchedCSR)
-	if csrMatch.Error == nil && matchedCSR.ID > 0 {
+	var matched *csrRow
+	matchedBySAN := false
+
+	// Primary: exact CN match (most specific).
+	if cn != "" {
+		var row csrRow
+		if err := db.Table("hycert_csrs").
+			Where("common_name = ? AND status = ? AND deleted_at IS NULL", cn, "pending").
+			Order("id ASC").First(&row).Error; err == nil && row.ID > 0 {
+			matched = &row
+		}
+	}
+
+	// Fallback: match a pending CSR whose CN or any SAN overlaps the cert's
+	// identifiers (CN + SANs). Case-insensitive exact name match.
+	if matched == nil {
+		certNames := make(map[string]struct{})
+		if cn != "" {
+			certNames[strings.ToLower(cn)] = struct{}{}
+		}
+		for _, s := range certSANs {
+			if s != "" {
+				certNames[strings.ToLower(s)] = struct{}{}
+			}
+		}
+		if len(certNames) > 0 {
+			var rows []csrRow
+			db.Table("hycert_csrs").
+				Where("status = ? AND deleted_at IS NULL", "pending").
+				Order("id ASC").Find(&rows)
+			for i := range rows {
+				names := []string{rows[i].CommonName}
+				var csrSANs []string
+				if json.Unmarshal([]byte(rows[i].SANs), &csrSANs) == nil {
+					names = append(names, csrSANs...)
+				}
+				for _, n := range names {
+					if n == "" {
+						continue
+					}
+					if _, ok := certNames[strings.ToLower(n)]; ok {
+						matched = &rows[i]
+						matchedBySAN = true
+						break
+					}
+				}
+				if matched != nil {
+					break
+				}
+			}
+		}
+	}
+
+	if matched != nil {
 		cert.Source = "csr"
-		cert.CSRID = &matchedCSR.ID
-		// Copy private key from CSR if cert has none
-		if cert.PrivateKeyEnc == "" && matchedCSR.PrivateKeyEnc != "" {
-			cert.PrivateKeyEnc = matchedCSR.PrivateKeyEnc
+		cert.CSRID = &matched.ID
+		// Copy private key from CSR if cert has none.
+		if cert.PrivateKeyEnc == "" && matched.PrivateKeyEnc != "" {
+			cert.PrivateKeyEnc = matched.PrivateKeyEnc
+		}
+		if matchedBySAN {
+			s.log.Info("auto-linked CSR by SAN fallback (CN mismatch)",
+				zap.Uint("csr_id", matched.ID),
+				zap.String("cert_cn", cn),
+			)
 		}
 	}
 
