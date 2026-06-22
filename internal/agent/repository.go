@@ -195,6 +195,21 @@ func (r *Repository) FindAllRegistrations(db *gorm.DB, q *AgentRegistrationListQ
 	if q.Status != "" {
 		tx = tx.Where("status = ?", q.Status)
 	}
+	if q.Search != "" {
+		like := "%" + q.Search + "%"
+		tx = tx.Where(
+			"name ILIKE ? OR hostname ILIKE ? OR agent_id ILIKE ? OR ip_addresses::text ILIKE ?",
+			like, like, like, like,
+		)
+	}
+	// Online/offline is computed, mirroring the UI: online = last_seen_at within
+	// poll_interval×2 (default 3600s when interval is 0/null).
+	switch q.OnlineStatus {
+	case "online":
+		tx = tx.Where("last_seen_at IS NOT NULL AND last_seen_at > NOW() - (COALESCE(NULLIF(poll_interval, 0), 3600) * 2) * INTERVAL '1 second'")
+	case "offline":
+		tx = tx.Where("last_seen_at IS NULL OR last_seen_at <= NOW() - (COALESCE(NULLIF(poll_interval, 0), 3600) * 2) * INTERVAL '1 second'")
+	}
 
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {

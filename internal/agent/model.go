@@ -216,9 +216,11 @@ type RegisterAgentRequest struct {
 }
 
 type AgentRegistrationListQuery struct {
-	Page     int    `form:"page,default=1"`
-	PageSize int    `form:"page_size,default=20"`
-	Status   string `form:"status"`
+	Page         int    `form:"page,default=1"`
+	PageSize     int    `form:"page_size,default=20"`
+	Status       string `form:"status"`        // active / disabled (stored)
+	OnlineStatus string `form:"online_status"` // online / offline (computed from last_seen_at + poll_interval)
+	Search       string `form:"search"`        // name / hostname / agent_id / IP
 }
 
 type AgentRegistrationListResponse struct {
