@@ -32,6 +32,10 @@ func (r *Repository) FindAllAccounts(db *gorm.DB, q *AccountListQuery) ([]AcmeAc
 	if q.Status != "" {
 		tx = tx.Where("status = ?", q.Status)
 	}
+	if q.Search != "" {
+		like := "%" + q.Search + "%"
+		tx = tx.Where("name ILIKE ? OR email ILIKE ?", like, like)
+	}
 
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
@@ -85,6 +89,10 @@ func (r *Repository) FindAllOrders(db *gorm.DB, q *OrderListQuery) ([]AcmeOrder,
 	}
 	if q.Status != "" {
 		tx = tx.Where("status = ?", q.Status)
+	}
+	if q.Search != "" {
+		like := "%" + q.Search + "%"
+		tx = tx.Where("domains::text ILIKE ? OR dns_provider ILIKE ?", like, like)
 	}
 
 	var total int64

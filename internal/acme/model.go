@@ -151,6 +151,7 @@ type AccountListQuery struct {
 	Page     int    `form:"page,default=1"`
 	PageSize int    `form:"page_size,default=20"`
 	Status   string `form:"status"`
+	Search   string `form:"search"` // name / email
 }
 
 type AccountListResponse struct {
@@ -177,6 +178,7 @@ type OrderListQuery struct {
 	PageSize  int    `form:"page_size,default=20"`
 	AccountID uint   `form:"account_id"`
 	Status    string `form:"status"`
+	Search    string `form:"search"` // domains / dns_provider
 }
 
 type OrderListResponse struct {

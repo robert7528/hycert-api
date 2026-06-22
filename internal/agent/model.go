@@ -103,6 +103,7 @@ type TokenListQuery struct {
 	Page     int    `form:"page,default=1"`
 	PageSize int    `form:"page_size,default=20"`
 	Status   string `form:"status"`
+	Search   string `form:"search"` // name / token_prefix / label / created_by
 }
 
 type TokenListResponse struct {

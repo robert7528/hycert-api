@@ -46,6 +46,10 @@ func (r *Repository) FindAllTokens(db *gorm.DB, tenantCode string, q *TokenListQ
 	if q.Status != "" {
 		tx = tx.Where("status = ?", q.Status)
 	}
+	if q.Search != "" {
+		like := "%" + q.Search + "%"
+		tx = tx.Where("name ILIKE ? OR token_prefix ILIKE ? OR label ILIKE ? OR created_by ILIKE ?", like, like, like, like)
+	}
 
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
