@@ -389,6 +389,7 @@ func (s *Service) executeOrder(db *gorm.DB, order *AcmeOrder, acct *AcmeAccount)
 	now := time.Now()
 	order.CertificateID = &certID
 	order.Status = "valid"
+	order.ErrorMessage = ""
 	order.LastRenewedAt = &now
 	s.repo.UpdateOrder(db, order)
 
@@ -448,6 +449,7 @@ func (s *Service) executeRenewal(db *gorm.DB, order *AcmeOrder, acct *AcmeAccoun
 	order.RenewFromID = oldCertID
 	order.CertificateID = &certID
 	order.Status = "valid"
+	order.ErrorMessage = ""
 	order.LastRenewedAt = &now
 	order.RetryCount = 0
 	s.repo.UpdateOrder(db, order)
