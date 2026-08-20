@@ -6,14 +6,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hysp/hycert-api/internal/acme"
 	"github.com/robert7528/hycore/middleware"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
-
-// acmeMaxRetries mirrors the retry_count ceiling in acme.Repository.FindRenewableOrders.
-// Past it the renewal scanner stops picking the order up and it needs a human.
-const acmeMaxRetries = 5
 
 // Handler handles health dashboard requests.
 type Handler struct {
@@ -193,18 +190,10 @@ func (h *Handler) GetHealthSummary(c *gin.Context) {
 		Order("updated_at DESC").
 		Find(&orders)
 	for _, o := range orders {
-		// Keep this in step with acme.Repository.FindRenewableOrders — it decides
-		// which of these rows the scanner can actually reach.
-		state := RetryScheduled
-		switch {
-		case !o.AutoRenew || o.CertificateID == nil:
-			state = RetryManual
-		case o.RetryCount >= acmeMaxRetries:
-			state = RetryExhausted
-		}
 		summary.AcmeOrdersFailed = append(summary.AcmeOrdersFailed, AcmeOrderWarning{
 			ID: o.ID, Domains: o.Domains, Status: o.Status, ErrorMessage: o.ErrorMessage,
-			CertificateID: o.CertificateID, RetryCount: o.RetryCount, RetryState: state,
+			CertificateID: o.CertificateID, RetryCount: o.RetryCount,
+			RetryState:    acme.RetryStateOf(o.Status, o.AutoRenew, o.CertificateID, o.RetryCount),
 			LastAttemptAt: o.LastAttemptAt, LastRenewedAt: o.LastRenewedAt, UpdatedAt: o.UpdatedAt,
 		})
 	}

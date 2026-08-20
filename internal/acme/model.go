@@ -59,6 +59,45 @@ func (a *AcmeAccount) ToDTO() AcmeAccountDTO {
 
 // ── ACME Order (tenant DB) ──────────────────────────────────────────────────
 
+// MaxRenewalRetries mirrors the retry_count ceiling in Repository.FindRenewableOrders.
+// Past it the renewal scanner stops picking an order up and it needs a human.
+const MaxRenewalRetries = 5
+
+// Retry states for a failed order, describing whether the renewal scanner will ever
+// pick it up again on its own:
+//
+//   - RetryScheduled: it will be retried once the backoff elapses.
+//   - RetryExhausted: retry_count hit the ceiling; automatic retries have stopped.
+//   - RetryManual:    the scanner can never reach it — either auto_renew is off, or
+//     the order has no certificate (a failed *initial* issuance, excluded by
+//     FindRenewableOrders' INNER JOIN on certificate_id). Rows like this stay on the
+//     dashboard forever unless someone acts on or deletes them.
+const (
+	RetryScheduled = "scheduled"
+	RetryExhausted = "exhausted"
+	RetryManual    = "manual"
+)
+
+// RetryStateOf classifies a failed order by what the renewal scanner can still do
+// with it. Non-failed orders get "", since the question does not apply.
+//
+// This is the single source of truth for the classification: the order list and the
+// health dashboard both render it, and the rules have to stay in step with
+// FindRenewableOrders, which is what actually decides.
+func RetryStateOf(status string, autoRenew bool, certificateID *uint, retryCount int) string {
+	if status != "failed" {
+		return ""
+	}
+	switch {
+	case !autoRenew || certificateID == nil:
+		return RetryManual
+	case retryCount >= MaxRenewalRetries:
+		return RetryExhausted
+	default:
+		return RetryScheduled
+	}
+}
+
 func (AcmeOrder) TableName() string { return "hycert_acme_orders" }
 
 type AcmeOrder struct {
@@ -94,6 +133,7 @@ type AcmeOrderDTO struct {
 	DNSProvider     string     `json:"dns_provider"`
 	KeyType         string     `json:"key_type"`
 	Status          string     `json:"status"`
+	RetryState      string     `json:"retry_state,omitempty"`
 	ErrorMessage    string     `json:"error_message,omitempty"`
 	OrderURL        string     `json:"order_url,omitempty"`
 	RenewFromID     *uint      `json:"renew_from_id"`
@@ -117,6 +157,7 @@ func (o *AcmeOrder) ToDTO() AcmeOrderDTO {
 		DNSProvider:     o.DNSProvider,
 		KeyType:         o.KeyType,
 		Status:          o.Status,
+		RetryState:      RetryStateOf(o.Status, o.AutoRenew, o.CertificateID, o.RetryCount),
 		ErrorMessage:    o.ErrorMessage,
 		OrderURL:        o.OrderURL,
 		RenewFromID:     o.RenewFromID,

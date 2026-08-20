@@ -60,22 +60,8 @@ type TokenWarning struct {
 	ExpiresAt   *time.Time `json:"expires_at"`
 }
 
-// Retry states for AcmeOrderWarning.RetryState, describing whether the renewal
-// scanner will ever pick this failed order up again on its own:
-//
-//   - RetryScheduled: the scanner will retry it once its backoff elapses.
-//   - RetryExhausted: retry_count hit the limit; automatic retries have stopped.
-//   - RetryManual:    the scanner can never reach it — either auto_renew is off, or
-//     the order has no certificate yet (a failed *initial* issuance, which the
-//     scanner's INNER JOIN on certificate_id excludes by design). Rows like this
-//     stay on the dashboard forever unless someone acts on or deletes them, so they
-//     need to be visually separable from problems that are still being worked on.
-const (
-	RetryScheduled = "scheduled"
-	RetryExhausted = "exhausted"
-	RetryManual    = "manual"
-)
-
+// RetryState below is acme.RetryStateOf's output — see that function for the
+// meaning of each value and why the classification lives in one place.
 type AcmeOrderWarning struct {
 	ID            uint       `json:"id"`
 	Domains       string     `json:"domains"`
