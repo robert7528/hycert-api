@@ -246,7 +246,7 @@ func (s *Service) CreateOrder(db *gorm.DB, req *CreateOrderRequest, username str
 	// Execute ACME flow in background goroutine.
 	// Use a context-free DB session so it survives after HTTP response is sent.
 	bgDB := db.WithContext(context.Background()).Session(&gorm.Session{NewDB: true})
-	go s.executeOrder(bgDB, order, acct)
+	s.safeGo(func() { s.executeOrder(bgDB, order, acct) })
 
 	dto := order.ToDTO()
 	return &dto, nil
@@ -309,8 +309,15 @@ func (s *Service) RenewOrder(db *gorm.DB, id uint) (*AcmeOrderDTO, error) {
 		return nil, err
 	}
 
-	if order.Status != "valid" {
-		return nil, fmt.Errorf("can only renew orders with status 'valid', current: %s", order.Status)
+	// Manual renewal is the escape hatch for an order the renewal scanner cannot
+	// rescue on its own: a 'failed' one is either waiting out an exponential backoff
+	// or has exhausted its retry budget entirely. Accepting only 'valid' closed that
+	// hatch exactly when it was needed most -- the button was greyed out precisely
+	// for the orders someone was trying to fix.
+	switch order.Status {
+	case "valid", "failed":
+	default:
+		return nil, fmt.Errorf("can only renew orders with status 'valid' or 'failed', current: %s", order.Status)
 	}
 
 	acct, err := s.repo.FindAccountByID(db, order.AccountID)
@@ -318,12 +325,20 @@ func (s *Service) RenewOrder(db *gorm.DB, id uint) (*AcmeOrderDTO, error) {
 		return nil, fmt.Errorf("account not found")
 	}
 
-	// Mark as processing
+	// Mark as processing. The retry budget is reset because a human asking for this
+	// is a deliberate fresh start, not another automatic attempt -- otherwise an
+	// order that had already burned through its retries would fail once more and go
+	// straight back to being unreachable. The stale error is cleared so the UI does
+	// not show the previous failure while this attempt is still running.
+	now := time.Now()
 	order.Status = "processing"
+	order.ErrorMessage = ""
+	order.RetryCount = 0
+	order.LastAttemptAt = &now
 	s.repo.UpdateOrder(db, order)
 
 	bgDB := db.WithContext(context.Background()).Session(&gorm.Session{NewDB: true})
-	go s.executeRenewal(bgDB, order, acct)
+	s.safeGo(func() { s.executeRenewal(bgDB, order, acct) })
 
 	dto := order.ToDTO()
 	return &dto, nil
