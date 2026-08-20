@@ -19,7 +19,8 @@ tink:
 
 scheduler:
   enabled: true
-  renewal_cron: "0 3 * * *"        # 每日 3:00 AM
+  timezone: "Asia/Taipei"           # cron 時刻的時區；不設會用容器的 time.Local（= UTC）
+  renewal_cron: "0 3 * * *"        # 每日 3:00 AM（依上方 timezone）
   renewal_before_days: 30           # 到期前 N 天開始續約
 
 acme:

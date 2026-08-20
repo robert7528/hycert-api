@@ -11,6 +11,10 @@ import (
 	"gorm.io/gorm"
 )
 
+// acmeMaxRetries mirrors the retry_count ceiling in acme.Repository.FindRenewableOrders.
+// Past it the renewal scanner stops picking the order up and it needs a human.
+const acmeMaxRetries = 5
+
 // Handler handles health dashboard requests.
 type Handler struct {
 	adminDB *gorm.DB
@@ -167,19 +171,41 @@ func (h *Handler) GetHealthSummary(c *gin.Context) {
 	}
 
 	// 7. ACME orders failed
+	//
+	// Timestamps matter here: without them a failure from months ago is
+	// indistinguishable from one that happened last night, and the only way to date
+	// it is digging through pod logs — which do not survive a restart.
 	var orders []struct {
-		ID           uint
-		Domains      string
-		Status       string
-		ErrorMessage string `gorm:"column:error_message"`
+		ID            uint
+		Domains       string
+		Status        string
+		ErrorMessage  string     `gorm:"column:error_message"`
+		CertificateID *uint      `gorm:"column:certificate_id"`
+		AutoRenew     bool       `gorm:"column:auto_renew"`
+		RetryCount    int        `gorm:"column:retry_count"`
+		LastAttemptAt *time.Time `gorm:"column:last_attempt_at"`
+		LastRenewedAt *time.Time `gorm:"column:last_renewed_at"`
+		UpdatedAt     time.Time  `gorm:"column:updated_at"`
 	}
 	tenantDB.Table("hycert_acme_orders").
-		Select("id, domains, status, error_message").
+		Select("id, domains, status, error_message, certificate_id, auto_renew, retry_count, last_attempt_at, last_renewed_at, updated_at").
 		Where("status = 'failed' AND deleted_at IS NULL").
+		Order("updated_at DESC").
 		Find(&orders)
 	for _, o := range orders {
+		// Keep this in step with acme.Repository.FindRenewableOrders — it decides
+		// which of these rows the scanner can actually reach.
+		state := RetryScheduled
+		switch {
+		case !o.AutoRenew || o.CertificateID == nil:
+			state = RetryManual
+		case o.RetryCount >= acmeMaxRetries:
+			state = RetryExhausted
+		}
 		summary.AcmeOrdersFailed = append(summary.AcmeOrdersFailed, AcmeOrderWarning{
 			ID: o.ID, Domains: o.Domains, Status: o.Status, ErrorMessage: o.ErrorMessage,
+			CertificateID: o.CertificateID, RetryCount: o.RetryCount, RetryState: state,
+			LastAttemptAt: o.LastAttemptAt, LastRenewedAt: o.LastRenewedAt, UpdatedAt: o.UpdatedAt,
 		})
 	}
 

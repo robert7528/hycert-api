@@ -1,6 +1,9 @@
 package app
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/hysp/hycert-api/internal/acme"
 	"github.com/hysp/hycert-api/internal/agent"
 	"github.com/hysp/hycert-api/internal/certificate"
@@ -37,7 +40,23 @@ func Run() error {
 			database.NewManager,
 
 			// Crypto (Tink encryptor)
-			func(cfg *config.Config) (corecrypto.Encryptor, error) {
+			//
+			// hycore's crypto.New falls back to a no-op encryptor when the keyset is
+			// empty, without a single log line. That fallback is invisible in normal
+			// operation — the API keeps working, it just stores private keys in
+			// plaintext and hands back raw Tink ciphertext where PEM is expected
+			// (ACME renewals fail with "parse account key: failed to decode PEM block",
+			// downloaded .key files come out as base64). Refuse to start in release
+			// mode rather than degrade silently.
+			func(cfg *config.Config, log *zap.Logger) (corecrypto.Encryptor, error) {
+				if cfg.Tink.Keyset == "" {
+					if strings.EqualFold(cfg.Server.Mode, "release") {
+						return nil, fmt.Errorf("TINK_KEYSET is empty: refusing to start in release mode, " +
+							"private keys would be stored and served unencrypted")
+					}
+					log.Warn("TINK_KEYSET is empty — private keys will NOT be encrypted " +
+						"(no-op encryptor); tolerated outside release mode only")
+				}
 				return corecrypto.New(cfg.Tink.Keyset)
 			},
 
@@ -107,6 +126,7 @@ func Run() error {
 					RenewalCron:     viper.GetString("scheduler.renewal_cron"),
 					RenewBeforeDays: viper.GetInt("scheduler.renewal_before_days"),
 					ExpirySyncCron:  viper.GetString("scheduler.expiry_sync_cron"),
+					Timezone:        viper.GetString("scheduler.timezone"),
 				}
 			},
 			scheduler.New,
