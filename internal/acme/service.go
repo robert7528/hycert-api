@@ -314,8 +314,20 @@ func (s *Service) RenewOrder(db *gorm.DB, id uint) (*AcmeOrderDTO, error) {
 	// or has exhausted its retry budget entirely. Accepting only 'valid' closed that
 	// hatch exactly when it was needed most -- the button was greyed out precisely
 	// for the orders someone was trying to fix.
+	//
+	// A failed order with no certificate is a different animal: it never issued in
+	// the first place, so there is nothing to renew. executeRenewal would quietly
+	// fall through to ObtainCertificate and mint a *new* certificate -- and since
+	// oldCertID is nil it would skip relinking deployments and superseding the old
+	// cert, leaving an orphan. Worse, the order would then hold a certificate_id and
+	// auto-renew forever, duplicating whatever order already covers that domain.
+	// Those belong to whoever created them: delete the row or file a fresh order.
 	switch order.Status {
-	case "valid", "failed":
+	case "valid":
+	case "failed":
+		if order.CertificateID == nil {
+			return nil, fmt.Errorf("order has no certificate to renew: this was a failed initial issuance, delete it or create a new order")
+		}
 	default:
 		return nil, fmt.Errorf("can only renew orders with status 'valid' or 'failed', current: %s", order.Status)
 	}
