@@ -47,8 +47,10 @@ func (r *Repository) FindAllAccounts(db *gorm.DB, q *AccountListQuery) ([]AcmeAc
 		page = 1
 	}
 	pageSize := q.PageSize
-	if pageSize < 1 || pageSize > 100 {
+	if pageSize < 1 {
 		pageSize = 20
+	} else if pageSize > 100 {
+		pageSize = 100 // clamp to the max, never fall back to the smaller default
 	}
 	tx = tx.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize)
 
@@ -105,8 +107,10 @@ func (r *Repository) FindAllOrders(db *gorm.DB, q *OrderListQuery) ([]AcmeOrder,
 		page = 1
 	}
 	pageSize := q.PageSize
-	if pageSize < 1 || pageSize > 100 {
+	if pageSize < 1 {
 		pageSize = 20
+	} else if pageSize > 100 {
+		pageSize = 100 // clamp to the max, never fall back to the smaller default
 	}
 	tx = tx.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize)
 

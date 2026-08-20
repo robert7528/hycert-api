@@ -112,8 +112,10 @@ func (s *Service) ListTokens(adminDB *gorm.DB, tenantDB *gorm.DB, tenantCode str
 		page = 1
 	}
 	pageSize := q.PageSize
-	if pageSize < 1 || pageSize > 100 {
+	if pageSize < 1 {
 		pageSize = 20
+	} else if pageSize > 100 {
+		pageSize = 100 // clamp to the max, never fall back to the smaller default
 	}
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {
@@ -316,8 +318,10 @@ func (s *Service) GetDeploymentHistory(tenantDB *gorm.DB, deploymentID uint, q *
 		page = 1
 	}
 	pageSize := q.PageSize
-	if pageSize < 1 || pageSize > 100 {
+	if pageSize < 1 {
 		pageSize = 20
+	} else if pageSize > 100 {
+		pageSize = 100 // clamp to the max, never fall back to the smaller default
 	}
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {
@@ -480,8 +484,10 @@ func (s *Service) ListRegistrations(tenantDB *gorm.DB, adminDB *gorm.DB, q *Agen
 		page = 1
 	}
 	pageSize := q.PageSize
-	if pageSize < 1 || pageSize > 100 {
+	if pageSize < 1 {
 		pageSize = 20
+	} else if pageSize > 100 {
+		pageSize = 100 // clamp to the max, never fall back to the smaller default
 	}
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {

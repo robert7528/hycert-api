@@ -302,9 +302,23 @@ func (s *Service) List(db *gorm.DB, q *ListQuery) (*ListResponse, error) {
 		return nil, err
 	}
 
+	ids := make([]uint, 0, len(certs))
+	for _, c := range certs {
+		ids = append(ids, c.ID)
+	}
+	deployCounts, err := s.repo.CountDeploymentsByCertIDs(db, ids)
+	if err != nil {
+		// The list is still useful without the counts; a failure here should not
+		// blank the page. Every certificate then reads as undeployed, so say why.
+		s.log.Warn("failed to count deployments for certificate list", zap.Error(err))
+		deployCounts = map[uint]int{}
+	}
+
 	items := make([]CertificateDTO, 0, len(certs))
 	for _, c := range certs {
-		items = append(items, c.ToDTO())
+		dto := c.ToDTO()
+		dto.DeploymentCount = deployCounts[c.ID]
+		items = append(items, dto)
 	}
 
 	page := q.Page
@@ -312,8 +326,10 @@ func (s *Service) List(db *gorm.DB, q *ListQuery) (*ListResponse, error) {
 		page = 1
 	}
 	pageSize := q.PageSize
-	if pageSize < 1 || pageSize > 100 {
+	if pageSize < 1 {
 		pageSize = 20
+	} else if pageSize > 100 {
+		pageSize = 100 // clamp to the max, never fall back to the smaller default
 	}
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {

@@ -55,6 +55,10 @@ type CertificateDTO struct {
 	CreatedBy         string     `json:"created_by"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
+	// DeploymentCount is how many active deployment targets point at this
+	// certificate. Only List fills it in; it stays 0 elsewhere. Counting active
+	// targets means a disabled one reads as "not deployed", which is what it is.
+	DeploymentCount int `json:"deployment_count"`
 }
 
 // ToDTO converts a Certificate entity to its API representation.

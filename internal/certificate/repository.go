@@ -39,6 +39,34 @@ func (r *Repository) FindByFingerprint(db *gorm.DB, fingerprint string) (*Certif
 }
 
 // FindAll retrieves certificates with pagination and filtering.
+// CountDeploymentsByCertIDs returns, per certificate id, how many active deployment
+// targets point at it. Callers that need this for a page of certificates get it in
+// one query rather than pulling the whole deployment table back and matching client
+// side -- which is what the certificate list used to do, and it quietly missed every
+// deployment past the first page.
+func (r *Repository) CountDeploymentsByCertIDs(db *gorm.DB, ids []uint) (map[uint]int, error) {
+	counts := make(map[uint]int, len(ids))
+	if len(ids) == 0 {
+		return counts, nil
+	}
+	var rows []struct {
+		CertificateID uint
+		Count         int
+	}
+	err := db.Table("hycert_deployments").
+		Select("certificate_id, COUNT(*) AS count").
+		Where("certificate_id IN ? AND status = 'active' AND deleted_at IS NULL", ids).
+		Group("certificate_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		counts[row.CertificateID] = row.Count
+	}
+	return counts, nil
+}
+
 func (r *Repository) FindAll(db *gorm.DB, q *ListQuery) ([]Certificate, int64, error) {
 	tx := db.Model(&Certificate{})
 
@@ -84,8 +112,10 @@ func (r *Repository) FindAll(db *gorm.DB, q *ListQuery) ([]Certificate, int64, e
 		page = 1
 	}
 	pageSize := q.PageSize
-	if pageSize < 1 || pageSize > 100 {
+	if pageSize < 1 {
 		pageSize = 20
+	} else if pageSize > 100 {
+		pageSize = 100 // clamp to the max, never fall back to the smaller default
 	}
 	tx = tx.Offset((page - 1) * pageSize).Limit(pageSize)
 

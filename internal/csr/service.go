@@ -97,8 +97,10 @@ func (s *Service) List(db *gorm.DB, q *CSRListQuery) (*CSRListResponse, error) {
 		page = 1
 	}
 	pageSize := q.PageSize
-	if pageSize < 1 || pageSize > 100 {
+	if pageSize < 1 {
 		pageSize = 20
+	} else if pageSize > 100 {
+		pageSize = 100 // clamp to the max, never fall back to the smaller default
 	}
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {
