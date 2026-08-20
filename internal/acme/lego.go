@@ -132,6 +132,14 @@ func (u *LegoUser) GetEmail() string                        { return u.Email }
 func (u *LegoUser) GetRegistration() *registration.Resource { return u.Registration }
 func (u *LegoUser) GetPrivateKey() crypto.PrivateKey        { return u.Key }
 
+// certIssuanceTimeout bounds how long lego waits for the CA to actually issue the
+// certificate after all challenges have been solved (lego's wait.For("certificate", ...)).
+// lego.NewConfig defaults this to 30s, which is fine for Let's Encrypt but too tight
+// for slower CAs (Sectigo has been observed taking longer, failing renewals with
+// "certificate: time limit exceeded" even though the order eventually succeeds on
+// the CA side -- burning a certificate every retry).
+const certIssuanceTimeout = 180 * time.Second
+
 // LegoClient wraps lego ACME operations.
 type LegoClient struct {
 	log               *zap.Logger
@@ -197,6 +205,7 @@ func (lc *LegoClient) ObtainCertificate(user *LegoUser, directoryURL string, dom
 	config := lego.NewConfig(user)
 	config.CADirURL = directoryURL
 	config.Certificate.KeyType = lc.parseKeyType(keyType)
+	config.Certificate.Timeout = certIssuanceTimeout
 
 	client, err := lego.NewClient(config)
 	if err != nil {
@@ -225,6 +234,7 @@ func (lc *LegoClient) RenewCertificate(user *LegoUser, directoryURL string, cert
 	config := lego.NewConfig(user)
 	config.CADirURL = directoryURL
 	config.Certificate.KeyType = lc.parseKeyType(keyType)
+	config.Certificate.Timeout = certIssuanceTimeout
 
 	client, err := lego.NewClient(config)
 	if err != nil {

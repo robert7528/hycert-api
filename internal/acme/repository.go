@@ -134,6 +134,12 @@ func (r *Repository) DeleteOrder(db *gorm.DB, id uint) error {
 //     5 attempts and are surfaced on the dashboard for manual handling.
 //   - 'processing' orders stuck > 1h (e.g. process restarted mid-renewal).
 //
+// The backoff comparison carries a 1h tolerance because last_attempt_at records when
+// an attempt *finished*, while the daily cron fires at a fixed wall-clock time. Without
+// it, a backoff that is an exact multiple of 24h (retry_count 2/3/4) always misses its
+// window by the attempt's own duration and slips a full extra day, wasting the limited
+// retry budget.
+//
 // Note: the INNER JOIN on certificate_id means failed *initial* issuances (no cert yet)
 // are never auto-retried here — by design they are surfaced on the dashboard instead.
 func (r *Repository) FindRenewableOrders(db *gorm.DB) ([]AcmeOrder, error) {
@@ -150,7 +156,7 @@ func (r *Repository) FindRenewableOrders(db *gorm.DB) ([]AcmeOrder, error) {
 		     OR (o.status = 'failed'
 		         AND o.retry_count < 5
 		         AND (o.last_attempt_at IS NULL
-		              OR o.last_attempt_at <= NOW() - INTERVAL '6 hours' * power(2, o.retry_count)))
+		              OR o.last_attempt_at <= NOW() - INTERVAL '6 hours' * power(2, o.retry_count) + INTERVAL '1 hour'))
 		     OR (o.status = 'processing'
 		         AND (o.last_attempt_at IS NULL
 		              OR o.last_attempt_at <= NOW() - INTERVAL '1 hour'))
